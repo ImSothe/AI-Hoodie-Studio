@@ -2,8 +2,8 @@
 
 import type { Canvas, FabricObject } from 'fabric';
 import { CanvasTexture, ClampToEdgeWrapping, LinearMipmapLinearFilter, SRGBColorSpace } from 'three';
-import { layerOfObject } from '../fabric/editor';
-import type { TechniqueLayer } from '../hoodie/spec';
+import { layerOfObject, techniqueOfObject } from '../fabric/editor';
+import { TECHNIQUES, type Technique, type TechniqueLayer } from '../hoodie/spec';
 import { rafThrottle } from '../utils';
 import { sizeOf, type PatternMode } from './layout';
 
@@ -104,4 +104,19 @@ export function exportPatternPng(): string {
   const ctx = all.getContext('2d')!;
   for (const layer of LAYERS) ctx.drawImage(getPrintCanvas(mode, layer), 0, 0);
   return all.toDataURL('image/png');
+}
+
+/** El lienzo de diseño con sólo los elementos de UNA técnica (nombre exacto: bordado y ton-sur-ton van aparte). */
+export function renderTechnique(technique: Technique, multiplier = 1): HTMLCanvasElement | null {
+  if (!source || source.destroyed) return null;
+  return source.toCanvasElement(multiplier, {
+    filter: (o) => isDesign(o as FabricObject) && techniqueOfObject(o as FabricObject) === technique,
+  });
+}
+
+/** Técnicas que hay ahora mismo en el lienzo, en el orden de la lista de técnicas. */
+export function techniquesInUse(): Technique[] {
+  if (!source) return [];
+  const used = new Set(source.getObjects().filter(isDesign).map((o) => techniqueOfObject(o)));
+  return TECHNIQUES.filter((t) => used.has(t));
 }

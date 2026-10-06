@@ -25,8 +25,8 @@ export const uvToPx = (u: number, v: number): [number, number] => [
 export type PatternMode = 'pieces' | 'joined';
 
 /** Lienzo de los tendidos unidos: dos tendidos (delantero y espalda) uno junto a otro. */
-export const JOINED_W = 2600;
-export const JOINED_H = 1300;
+export const JOINED_W = 3200;
+export const JOINED_H = 1600;
 
 export const sizeOf = (mode: PatternMode) =>
   mode === 'joined' ? { w: JOINED_W, h: JOINED_H } : { w: PATTERN_W, h: PATTERN_H };

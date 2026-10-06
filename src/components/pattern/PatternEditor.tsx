@@ -1,23 +1,58 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { Canvas, FabricImage, Point, Rect, loadSVGFromString, util, type FabricObject } from 'fabric';
+import {
+  Canvas,
+  Ellipse,
+  FabricImage,
+  Point,
+  Polygon,
+  Polyline,
+  Rect,
+  Triangle,
+  loadSVGFromString,
+  util,
+  type FabricObject,
+  type TPointerEvent,
+} from 'fabric';
 import { importFiles } from '@/lib/assets/importFiles';
 import { TEMPLATES, templateAsset } from '@/lib/assets/templates';
-import { layerOfObject } from '@/lib/fabric/editor';
-import { restoreObject, tintObject, type Styled } from '@/lib/fabric/tint';
-import { TECHNIQUE_INFO, techniqueOf, type TechniqueLayer } from '@/lib/hoodie/spec';
-import { sizeOf } from '@/lib/pattern/layout';
+import { techniqueOfObject } from '@/lib/fabric/editor';
+import { restoreObject, setTechnique, tintObject, tonalInk, isTonal, type Styled } from '@/lib/fabric/tint';
+import { TECHNIQUE_INFO, TECHNIQUES, TONAL_TECHNIQUE, type Technique } from '@/lib/hoodie/spec';
 import type { PatternAnalysis } from '@/lib/pattern/analysis';
-import { drawPatternGuide } from '@/lib/pattern/guide';
-import type { PatternMode } from '@/lib/pattern/layout';
 import { bakeToPieces } from '@/lib/pattern/bake';
-import { LAYERS, bindPrintSource, exportPatternPng, layerInUse, renderLayer, schedulePrint, setPrintMode } from '@/lib/pattern/print';
+import { drawPatternGuide } from '@/lib/pattern/guide';
+import { History, capture, restore } from '@/lib/pattern/history';
+import { sizeOf, type PatternMode } from '@/lib/pattern/layout';
+import {
+  bindPrintSource,
+  exportPatternPng,
+  renderTechnique,
+  schedulePrint,
+  setPrintMode,
+  techniquesInUse,
+} from '@/lib/pattern/print';
 import type { GeneratedAsset } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const SWATCHES = ['#FFFFFF', '#EDE8DF', '#BFC1C2', '#8E8A83', '#3A3A3A', '#0A0A0A', '#5A1622', '#B5A27A'];
 const EVENTS = ['object:added', 'object:removed', 'object:modified', 'object:moving', 'object:scaling', 'object:rotating'] as const;
+
+const TECH_UI: { tech: Technique; label: string; hint: string }[] = [
+  { tech: TECHNIQUES[0], label: 'Estampado', hint: 'Tinta plana y mate. Lo más versátil.' },
+  { tech: TECHNIQUES[1], label: 'Reflectante', hint: 'Brilla con el flash: metálico y liso.' },
+  { tech: TECHNIQUES[2], label: 'Bordado', hint: 'Hilo con puntadas y relieve. Para logos y detalles.' },
+  { tech: TONAL_TECHNIQUE, label: 'Ton-sur-ton', hint: 'Hilo del color de la tela: sólo se ve por el relieve y el brillo.' },
+];
+
+type CropKind = 'rect' | 'ellipse' | 'triangle' | 'free';
+const CROP_UI: { kind: CropKind; label: string }[] = [
+  { kind: 'rect', label: 'Rectángulo' },
+  { kind: 'ellipse', label: 'Círculo' },
+  { kind: 'triangle', label: 'Triángulo' },
+  { kind: 'free', label: 'Libre' },
+];
 
 async function createObject(asset: GeneratedAsset): Promise<FabricObject> {
   if (asset.kind === 'svg' && asset.svg) {
@@ -30,13 +65,9 @@ async function createObject(asset: GeneratedAsset): Promise<FabricObject> {
   return FabricImage.fromURL(asset.src);
 }
 
+const isDesignObject = (o: FabricObject | undefined | null) =>
+  !!o && (o as FabricObject & { hoodieRole?: string }).hoodieRole === 'design';
 const SAVED_PROPS = ['hoodieRole', 'assetName', 'tecnica'];
-const LAYER_LABEL: Record<TechniqueLayer, string> = { print: 'Estampado', reflective: 'Reflectante', embroidery: 'Bordado' };
-const LAYER_HINT: Record<TechniqueLayer, string> = {
-  print: 'Tinta plana y mate. Lo más versátil.',
-  reflective: 'Brilla con el flash: metálico y liso.',
-  embroidery: 'Hilo con puntadas y relieve. Para logos y detalles.',
-};
 
 /** Tiradores grandes y visibles: el lienzo se ve reducido en pantalla, así que se dimensionan según la escala. */
 function styleControls(obj: FabricObject, scale: number) {
@@ -54,14 +85,38 @@ function styleControls(obj: FabricObject, scale: number) {
   });
 }
 
+/** Sangrado: el borde del arte se prolonga unos píxeles más allá del contorno de cada pieza (para el corte). */
+function addBleed(src: HTMLCanvasElement, px: number) {
+  const out = document.createElement('canvas');
+  out.width = src.width;
+  out.height = src.height;
+  const ctx = out.getContext('2d')!;
+  ctx.drawImage(src, 0, 0);
+  ctx.globalCompositeOperation = 'destination-over';
+  for (let r = 1; r <= px; r++) {
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) ctx.drawImage(src, dx * r, dy * r);
+  }
+  return out;
+}
+
 const btn =
   'border border-fg/20 px-3 py-2 text-[10px] tracking-[0.2em] text-fg uppercase transition hover:border-fg/60 disabled:opacity-30 disabled:hover:border-fg/20';
+
+const isTonalName = (tech: Technique) => tech === TONAL_TECHNIQUE;
 
 /**
  * Lienzo plano del patrón: las piezas de tela desplegadas. Todo lo que se
  * coloca aquí aparece cosido en la prenda 3D (por las UV del modelo).
  */
-export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | null; mode: PatternMode }) {
+export function PatternEditor({
+  analysis,
+  mode,
+  garmentColor,
+}: {
+  analysis: PatternAnalysis | null;
+  mode: PatternMode;
+  garmentColor: string;
+}) {
   const boxRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLCanvasElement>(null);
@@ -72,22 +127,65 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
   const sizeRef = useRef(size);
   sizeRef.current = size;
   const scale = Math.max(0.1, Math.min(room.w / size.w, room.h / size.h));
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  const garmentRef = useRef(garmentColor);
+  garmentRef.current = garmentColor;
   const [hasSelection, setHasSelection] = useState(false);
   const [labels, setLabels] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [activeLayer, setActiveLayer] = useState<TechniqueLayer | null>(null);
+  const [activeTech, setActiveTech] = useState<Technique | null>(null);
   const [clipped, setClipped] = useState(false);
-  const [crop, setCrop] = useState<{ target: FabricObject; rect: Rect } | null>(null);
   const [notice, setNotice] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [, bump] = useState(0);
+
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(''), 3500);
     return () => clearTimeout(timer);
   }, [notice]);
-  const scaleRef = useRef(scale);
-  scaleRef.current = scale;
 
-  // Lienzo de Fabric (resolución completa del patrón; en pantalla sólo se escala por CSS).
+  /* ------------------------------------------------------------------ historial */
+  const histories = useRef<Record<PatternMode, History>>({ joined: new History(), pieces: new History() });
+  const restoring = useRef(false);
+  const modeRef = useRef(mode);
+  const modeObjects = useRef<Partial<Record<PatternMode, FabricObject[]>>>({});
+  const recordTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Guarda el estado actual como un paso (los cambios seguidos se agrupan). */
+  const record = useCallback(() => {
+    if (restoring.current) return;
+    if (recordTimer.current) clearTimeout(recordTimer.current);
+    recordTimer.current = setTimeout(() => {
+      recordTimer.current = null;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      if (histories.current[modeRef.current].push(capture(canvas))) bump((n) => n + 1);
+    }, 350);
+  }, []);
+
+  const step = useCallback((dir: 'undo' | 'redo') => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (recordTimer.current) {
+      clearTimeout(recordTimer.current);
+      recordTimer.current = null;
+      histories.current[modeRef.current].push(capture(canvas)); // lo pendiente entra antes de deshacer
+    }
+    const h = histories.current[modeRef.current];
+    const snap = dir === 'undo' ? h.undo() : h.redo();
+    if (!snap) return;
+    restoring.current = true;
+    restore(canvas, snap);
+    restoring.current = false;
+    schedulePrint();
+    setHasSelection(false);
+    setActiveTech(null);
+    bump((n) => n + 1);
+  }, []);
+
+  /* ------------------------------------------------------------------ lienzo */
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -109,21 +207,37 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     const sel = () => {
       const active = canvas.getActiveObject();
       setHasSelection(canvas.getActiveObjects().length > 0);
-      const design = active && (active as FabricObject & { hoodieRole?: string }).hoodieRole === 'design' ? active : null;
-      setActiveLayer(design ? layerOfObject(design) : null);
+      const design = isDesignObject(active) ? active! : null;
+      setActiveTech(design ? techniqueOfObject(design) : null);
       setClipped(!!design?.clipPath);
     };
     offs.push(canvas.on('selection:created', sel), canvas.on('selection:updated', sel), canvas.on('selection:cleared', sel));
+    const changed = ({ target }: { target?: FabricObject }) => {
+      if (isDesignObject(target)) record();
+    };
+    offs.push(canvas.on('object:modified', changed), canvas.on('object:added', changed), canvas.on('object:removed', changed));
 
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement | null)?.closest('input, textarea, select')) return;
+      const k = e.key.toLowerCase();
+      // Deshacer / rehacer
+      if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        step('undo');
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        step('redo');
+        return;
+      }
       // Flechas: mover la pieza (Mayús = 10 veces más).
-      const step = e.shiftKey ? 20 : 2;
+      const stepPx = e.shiftKey ? 20 : 2;
       const arrows: Record<string, [number, number]> = {
-        ArrowLeft: [-step, 0],
-        ArrowRight: [step, 0],
-        ArrowUp: [0, -step],
-        ArrowDown: [0, step],
+        ArrowLeft: [-stepPx, 0],
+        ArrowRight: [stepPx, 0],
+        ArrowUp: [0, -stepPx],
+        ArrowDown: [0, stepPx],
       };
       const move = arrows[e.key];
       const selected = canvas.getActiveObject();
@@ -133,6 +247,7 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
         selected.setCoords();
         canvas.requestRenderAll();
         schedulePrint();
+        if (isDesignObject(selected)) record();
         return;
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -148,12 +263,13 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     return () => {
       window.removeEventListener('keydown', onKey);
       offs.forEach((off) => off());
+      if (recordTimer.current) clearTimeout(recordTimer.current);
       bindPrintSource(null);
       canvasRef.current = null;
       void canvas.dispose();
       el.parentElement?.remove();
     };
-  }, []);
+  }, [record, step]);
 
   // Escala de pantalla: el patrón cabe entero en el espacio disponible.
   useEffect(() => {
@@ -191,24 +307,52 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     if (analysis) drawPatternGuide(ctx, analysis, mode, labels);
   }, [analysis, mode, labels, size.w, size.h]);
 
-  // Cada modo tiene su propio diseño: al cambiar se guarda el actual y se carga el del otro.
-  const modeRef = useRef(mode);
-  const saved = useRef<Partial<Record<PatternMode, object>>>({});
+  // Cada modo tiene sus propios diseños (las mismas piezas de Fabric): al cambiar se guardan los actuales y se ponen los del otro.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || modeRef.current === mode) return;
-    saved.current[modeRef.current] = canvas.toObject(SAVED_PROPS);
-    modeRef.current = mode;
+    if (recordTimer.current) {
+      clearTimeout(recordTimer.current);
+      recordTimer.current = null;
+      histories.current[modeRef.current].push(capture(canvas));
+    }
+    restoring.current = true;
+    modeObjects.current[modeRef.current] = canvas.getObjects().filter(isDesignObject);
     canvas.discardActiveObject();
-    canvas.clear();
+    canvas.getObjects().forEach((o) => canvas.remove(o));
+    modeRef.current = mode;
     // Cada modo tiene su propio lienzo, con su propio tamaño.
     canvas.setDimensions({ width: sizeOf(mode).w, height: sizeOf(mode).h }, { backstoreOnly: true });
-    void canvas.loadFromJSON(saved.current[mode] ?? { objects: [] }).then(() => {
-      canvas.getObjects().forEach((o) => styleControls(o, scaleRef.current));
-      canvas.requestRenderAll();
-      setPrintMode(mode);
-    });
+    for (const o of modeObjects.current[mode] ?? []) {
+      styleControls(o, scaleRef.current);
+      canvas.add(o);
+    }
+    restoring.current = false;
+    canvas.requestRenderAll();
+    setPrintMode(mode);
+    setHasSelection(false);
+    setActiveTech(null);
+    bump((n) => n + 1);
   }, [mode]);
+
+  // El hilo ton-sur-ton sigue al color del tejido.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let any = false;
+    for (const list of [canvas.getObjects(), ...Object.values(modeObjects.current)]) {
+      for (const o of list ?? []) {
+        if (isDesignObject(o) && isTonal(o)) {
+          tintObject(o as Styled, tonalInk(garmentColor, (o as Styled).tonoShift));
+          any = true;
+        }
+      }
+    }
+    if (any) {
+      canvas.requestRenderAll();
+      schedulePrint();
+    }
+  }, [garmentColor]);
 
   const place = useCallback(async (assets: GeneratedAsset[]) => {
     const canvas = canvasRef.current;
@@ -238,6 +382,7 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     }
   };
 
+  /** Aplica un cambio al diseño elegido, repinta y lo anota para poder deshacerlo. */
   const withActive = (fn: (obj: FabricObject, canvas: Canvas) => void | Promise<void>) => async () => {
     const canvas = canvasRef.current;
     const obj = canvas?.getActiveObject();
@@ -245,72 +390,195 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     await fn(obj, canvas);
     canvas.requestRenderAll();
     schedulePrint();
+    record();
   };
 
-  const setLayer = (layer: TechniqueLayer) =>
-    withActive((obj) => {
-      obj.set('tecnica' as never, techniqueOf(layer) as never);
-      setActiveLayer(layer);
+  const setTech = (tech: Technique) =>
+    void withActive((obj) => {
+      setTechnique(obj as Styled, tech, garmentRef.current);
+      setActiveTech(tech);
     })();
 
-  // Recortar: un rectángulo ajustable sobre la pieza; al aplicarlo se queda como recorte de la propia pieza.
+  /* ------------------------------------------------------------------ recortar */
+  // Una forma ajustable sobre el diseño: al aplicarla se queda como recorte de la propia pieza,
+  // o se separa esa parte en una pieza nueva (con su propia técnica y color).
+  const [crop, setCrop] = useState<{ target: FabricObject; shape: FabricObject | null; kind: CropKind; points: Point[] } | null>(null);
+  const cropRef = useRef(crop);
+  cropRef.current = crop;
+  const preview = useRef<FabricObject | null>(null);
+
+  const shapeStyle = () => ({
+    fill: 'rgba(255,255,255,0.14)',
+    stroke: '#ffffff',
+    strokeWidth: 3 / scaleRef.current,
+    strokeUniform: true,
+    strokeDashArray: [18 / scaleRef.current, 12 / scaleRef.current],
+    objectCaching: false,
+  });
+
+  const makeShape = (kind: Exclude<CropKind, 'free'>, target: FabricObject) => {
+    const b = target.getBoundingRect();
+    const w = b.width * 0.8;
+    const h = b.height * 0.8;
+    const common = { ...shapeStyle(), left: b.left + b.width * 0.1, top: b.top + b.height * 0.1 };
+    return kind === 'ellipse'
+      ? new Ellipse({ ...common, rx: w / 2, ry: h / 2 })
+      : kind === 'triangle'
+        ? new Triangle({ ...common, width: w, height: h })
+        : new Rect({ ...common, width: w, height: h });
+  };
+
+  const clearCropShape = (canvas: Canvas) => {
+    const c = cropRef.current;
+    if (c?.shape) canvas.remove(c.shape);
+    if (preview.current) canvas.remove(preview.current);
+    preview.current = null;
+    canvas.skipTargetFind = false;
+    canvas.defaultCursor = 'default';
+  };
+
+  const chooseShape = (kind: CropKind) => {
+    const canvas = canvasRef.current;
+    const c = cropRef.current;
+    if (!canvas || !c) return;
+    clearCropShape(canvas);
+    if (kind === 'free') {
+      // Forma libre: clic punto a punto; se cierra con «Cerrar forma», Intro o pulsando el primer punto.
+      canvas.discardActiveObject();
+      canvas.skipTargetFind = true;
+      canvas.defaultCursor = 'crosshair';
+      setCrop({ ...c, shape: null, kind, points: [] });
+    } else {
+      const shape = makeShape(kind, c.target);
+      styleControls(shape, scaleRef.current);
+      canvas.add(shape);
+      canvas.setActiveObject(shape);
+      setCrop({ ...c, shape, kind, points: [] });
+    }
+    canvas.requestRenderAll();
+  };
+
+  const closeFree = () => {
+    const canvas = canvasRef.current;
+    const c = cropRef.current;
+    if (!canvas || !c || c.kind !== 'free' || c.points.length < 3) return;
+    clearCropShape(canvas);
+    const shape = new Polygon(
+      c.points.map((p) => ({ x: p.x, y: p.y })),
+      shapeStyle(),
+    );
+    styleControls(shape, scaleRef.current);
+    canvas.add(shape);
+    canvas.setActiveObject(shape);
+    canvas.requestRenderAll();
+    setCrop({ ...c, shape, points: [] });
+  };
+
   const startCrop = () => {
     const canvas = canvasRef.current;
     const target = canvas?.getActiveObject();
-    if (!canvas || !target) return;
-    const b = target.getBoundingRect();
-    const rect = new Rect({
-      left: b.left + b.width * 0.1,
-      top: b.top + b.height * 0.1,
-      width: b.width * 0.8,
-      height: b.height * 0.8,
-      fill: 'rgba(255,255,255,0.12)',
-      stroke: '#ffffff',
-      strokeWidth: 3 / scaleRef.current,
-      strokeUniform: true,
-      strokeDashArray: [18 / scaleRef.current, 12 / scaleRef.current],
-      objectCaching: false,
-    });
-    styleControls(rect, scaleRef.current);
-    canvas.add(rect);
-    canvas.setActiveObject(rect);
+    if (!canvas || !target || !isDesignObject(target)) return;
+    const shape = makeShape('rect', target);
+    styleControls(shape, scaleRef.current);
+    canvas.add(shape);
+    canvas.setActiveObject(shape);
     canvas.requestRenderAll();
-    setCrop({ target, rect });
-  };
-  const finishCrop = (apply: boolean) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !crop) return;
-    const { target, rect } = crop;
-    if (apply) {
-      // El rectángulo (en el plano) se pasa al espacio de la pieza, que puede estar escalada o girada.
-      const inverse = util.invertTransform(target.calcTransformMatrix());
-      const r = rect.getBoundingRect();
-      const corners = [
-        new Point(r.left, r.top),
-        new Point(r.left + r.width, r.top),
-        new Point(r.left + r.width, r.top + r.height),
-        new Point(r.left, r.top + r.height),
-      ].map((p) => p.transform(inverse));
-      const xs = corners.map((p) => p.x);
-      const ys = corners.map((p) => p.y);
-      target.clipPath = new Rect({
-        left: (Math.min(...xs) + Math.max(...xs)) / 2,
-        top: (Math.min(...ys) + Math.max(...ys)) / 2,
-        width: Math.max(...xs) - Math.min(...xs),
-        height: Math.max(...ys) - Math.min(...ys),
-        originX: 'center',
-        originY: 'center',
-      });
-      target.dirty = true;
-    }
-    canvas.remove(rect);
-    canvas.setActiveObject(target);
-    canvas.requestRenderAll();
-    schedulePrint();
-    setCrop(null);
-    setClipped(!!target.clipPath);
+    setCrop({ target, shape, kind: 'rect', points: [] });
   };
 
+  // Forma libre: los clics del ratón van sumando puntos.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !crop || crop.kind !== 'free' || crop.shape) return;
+    const onDown = (opt: { e: TPointerEvent }) => {
+      const c = cropRef.current;
+      if (!c || c.kind !== 'free' || c.shape) return;
+      const p = canvas.getScenePoint(opt.e);
+      const first = c.points[0];
+      if (first && c.points.length >= 3 && Math.hypot(p.x - first.x, p.y - first.y) < 30 / scaleRef.current) {
+        closeFree();
+        return;
+      }
+      const points = [...c.points, p];
+      if (preview.current) canvas.remove(preview.current);
+      const line = new Polyline(
+        points.map((q) => ({ x: q.x, y: q.y })),
+        { fill: '', stroke: '#ffffff', strokeWidth: 3 / scaleRef.current, strokeUniform: true, selectable: false, evented: false, objectCaching: false },
+      );
+      preview.current = line;
+      canvas.add(line);
+      canvas.requestRenderAll();
+      setCrop({ ...c, points });
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') closeFree();
+      if (e.key === 'Escape') void finishCrop('cancel');
+    };
+    canvas.on('mouse:down', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      canvas.off('mouse:down', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [crop?.kind, crop?.shape]);
+
+  /** La forma, pasada al espacio de la pieza (que puede estar escalada o girada), lista para usar como recorte. */
+  const clipFrom = async (target: FabricObject, shape: FabricObject, inverted: boolean) => {
+    const inverse = util.invertTransform(target.calcTransformMatrix());
+    const d = util.qrDecompose(util.multiplyTransformMatrices(inverse, shape.calcTransformMatrix()));
+    const clip = await shape.clone();
+    clip.set({
+      left: d.translateX,
+      top: d.translateY,
+      scaleX: d.scaleX,
+      scaleY: d.scaleY,
+      angle: d.angle,
+      skewX: d.skewX,
+      skewY: d.skewY,
+      originX: 'center',
+      originY: 'center',
+      fill: '#000000',
+      stroke: undefined,
+      strokeWidth: 0,
+      strokeDashArray: undefined,
+      inverted,
+      absolutePositioned: false,
+    } as never);
+    return clip;
+  };
+
+  const finishCrop = async (action: 'apply' | 'split' | 'cancel') => {
+    const canvas = canvasRef.current;
+    const c = cropRef.current;
+    if (!canvas || !c) return;
+    const { target, shape } = c;
+    if (action !== 'cancel' && shape) {
+      if (action === 'apply') {
+        target.clipPath = await clipFrom(target, shape, false);
+        target.dirty = true;
+      } else {
+        // Separar: una copia con sólo esa parte y el original con todo lo demás.
+        const part = await target.clone(SAVED_PROPS);
+        part.clipPath = await clipFrom(target, shape, false);
+        part.dirty = true;
+        target.clipPath = await clipFrom(target, shape, true);
+        target.dirty = true;
+        styleControls(part, scaleRef.current);
+        canvas.add(part);
+        canvas.setActiveObject(part);
+      }
+    }
+    clearCropShape(canvas);
+    if (action !== 'split') canvas.setActiveObject(target);
+    canvas.requestRenderAll();
+    setCrop(null);
+    setClipped(!!canvas.getActiveObject()?.clipPath);
+    schedulePrint();
+    if (action !== 'cancel') record();
+  };
+
+  /* ------------------------------------------------------------------ exportar */
   const download = () => {
     const a = document.createElement('a');
     a.href = exportPatternPng();
@@ -320,23 +588,22 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
 
   /**
    * Para fábrica: el dibujo cortado en las piezas sueltas de taller (cada pieza con su trozo, ya encajado con las
-   * vecinas) + un plano con los contornos y nombres para que el taller sepa qué es cada una.
+   * vecinas), un archivo por técnica, con sangrado, + un plano con los contornos y nombres.
    */
-  const [exporting, setExporting] = useState(false);
   const downloadFactory = async () => {
     if (!analysis) return;
     setExporting(true);
     try {
       await new Promise((r) => setTimeout(r, 30)); // deja pintar el aviso antes del cálculo
-      const used = LAYERS.filter(layerInUse);
+      const used = techniquesInUse();
       if (!used.length) {
         setNotice('Aún no hay ningún diseño en el plano.');
         return;
       }
-      // Un archivo por técnica: el taller imprime, borda o aplica reflectante por separado.
-      const arts = used.map((layer) => {
-        const raw = renderLayer(layer, mode === 'joined' ? 2 : 1) ?? document.createElement('canvas');
-        return { layer, canvas: mode === 'joined' ? bakeToPieces(analysis, raw) : raw };
+      const BLEED = 6;
+      const arts = used.map((tech) => {
+        const raw = renderTechnique(tech, mode === 'joined' ? 2 : 1) ?? document.createElement('canvas');
+        return { tech, canvas: addBleed(mode === 'joined' ? bakeToPieces(analysis, raw) : raw, BLEED) };
       });
       const outline = document.createElement('canvas');
       outline.width = sizeOf('pieces').w;
@@ -350,11 +617,11 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
       const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       const lines: string[] = [];
-      for (const { layer, canvas } of arts) {
-        const info = TECHNIQUE_INFO[techniqueOf(layer)];
+      for (const { tech, canvas } of arts) {
+        const info = TECHNIQUE_INFO[tech];
         const name = `${info.code}-${info.slug}.png`;
         zip.file(name, await blobOf(canvas));
-        lines.push(`${name}: ${LAYER_LABEL[layer]} (${techniqueOf(layer)}). ${info.note}`);
+        lines.push(`${name}: ${tech}. ${info.note}`);
       }
       zip.file('plano-con-nombres.png', await blobOf(outline));
       zip.file(
@@ -362,7 +629,7 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
         'Diseño cortado en las piezas de taller, un archivo por técnica (fondo transparente, todas las piezas en una imagen):\n' +
           lines.join('\n') +
           '\n\nplano-con-nombres.png: todo sobre las siluetas de cada pieza, con su nombre, para que el taller sepa cuál es cuál.\n' +
-          'Los dibujos que pasan de una pieza a otra encajan en las costuras. No incluyen margen de costura ni sangrado.\n',
+          `Los dibujos que pasan de una pieza a otra encajan en las costuras. El arte se prolonga ${BLEED} px más allá del contorno de cada pieza (sangrado). No incluye margen de costura.\n`,
       );
       const url = URL.createObjectURL(await zip.generateAsync({ type: 'blob' }));
       const a = document.createElement('a');
@@ -374,6 +641,10 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
       setExporting(false);
     }
   };
+
+  const h = histories.current[mode];
+  const hintOf = (tech: Technique | null) => TECH_UI.find((t) => t.tech === tech)?.hint ?? 'Elija un diseño del plano.';
+  const tonal = !!activeTech && isTonalName(activeTech);
 
   return (
     <section className="flex h-full min-h-0 flex-col">
@@ -399,40 +670,39 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
           ))}
         </select>
         <span className="mx-1 h-5 w-px bg-line" />
+        <button type="button" className={btn} disabled={!h.canUndo} onClick={() => step('undo')} title="Deshacer (Ctrl+Z)">
+          ↶ Deshacer
+        </button>
+        <button type="button" className={btn} disabled={!h.canRedo} onClick={() => step('redo')} title="Rehacer (Ctrl+Y)">
+          Rehacer ↷
+        </button>
+        <span className="mx-1 h-5 w-px bg-line" />
         <button
           type="button"
-          disabled={!hasSelection}
+          disabled={!hasSelection || !!crop}
           className={btn}
           onClick={withActive(async (obj, canvas) => {
             const copy = await obj.clone(SAVED_PROPS);
             copy.set({ left: obj.left + 40, top: obj.top + 40 });
+            styleControls(copy, scaleRef.current);
             canvas.add(copy);
             canvas.setActiveObject(copy);
           })}
         >
           Duplicar
         </button>
-        <button type="button" disabled={!hasSelection} className={btn} onClick={withActive((obj) => void obj.set({ flipX: !obj.flipX }))}>
+        <button type="button" disabled={!hasSelection || !!crop} className={btn} onClick={withActive((obj) => void obj.set({ flipX: !obj.flipX }))}>
           Espejo
         </button>
-        <button type="button" disabled={!hasSelection} className={btn} onClick={withActive((obj, canvas) => void canvas.bringObjectForward(obj))}>
+        <button type="button" disabled={!hasSelection || !!crop} className={btn} onClick={withActive((obj, canvas) => void canvas.bringObjectForward(obj))}>
           Subir
         </button>
-        <button type="button" disabled={!hasSelection} className={btn} onClick={withActive((obj, canvas) => void canvas.sendObjectBackwards(obj))}>
+        <button type="button" disabled={!hasSelection || !!crop} className={btn} onClick={withActive((obj, canvas) => void canvas.sendObjectBackwards(obj))}>
           Bajar
         </button>
-        {crop ? (
+        {!crop && (
           <>
-            <button type="button" className={cn(btn, 'border-fg')} onClick={() => finishCrop(true)}>
-              Aplicar recorte
-            </button>
-            <button type="button" className={btn} onClick={() => finishCrop(false)}>
-              Cancelar
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" disabled={!hasSelection || !activeLayer} className={btn} onClick={startCrop} title="Deja sólo una parte del diseño">
+            <button type="button" disabled={!hasSelection || !activeTech} className={btn} onClick={startCrop} title="Deja sólo una parte del diseño (o la separa en una pieza nueva)">
               Recortar
             </button>
             {clipped && (
@@ -473,31 +743,65 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
         </button>
       </div>
 
-      <div className={cn('flex flex-wrap items-center gap-2 border-b border-line px-5 py-2.5', !activeLayer && 'opacity-40')}>
+      {crop && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-line bg-white/[0.03] px-5 py-2.5">
+          <span className="label-tech mr-1">Recorte</span>
+          {CROP_UI.map((c) => (
+            <button key={c.kind} type="button" aria-pressed={crop.kind === c.kind} className={cn(btn, crop.kind === c.kind && 'border-fg bg-white/10')} onClick={() => chooseShape(c.kind)}>
+              {c.label}
+            </button>
+          ))}
+          <span className="mx-1 h-5 w-px bg-line" />
+          {crop.kind === 'free' && !crop.shape ? (
+            <>
+              <button type="button" className={btn} disabled={crop.points.length < 3} onClick={closeFree}>
+                Cerrar forma
+              </button>
+              <span className="font-editorial text-[14px] font-light text-muted italic">
+                Pulse sobre el plano punto a punto; para cerrar, el primer punto o Intro.
+              </span>
+            </>
+          ) : (
+            <>
+              <button type="button" className={cn(btn, 'border-fg')} onClick={() => void finishCrop('apply')}>
+                Aplicar recorte
+              </button>
+              <button type="button" className={btn} onClick={() => void finishCrop('split')} title="Esa parte pasa a ser una pieza aparte, con su propia técnica y color">
+                Separar parte
+              </button>
+            </>
+          )}
+          <button type="button" className={btn} onClick={() => void finishCrop('cancel')}>
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      <div className={cn('flex flex-wrap items-center gap-2 border-b border-line px-5 py-2.5', !activeTech && 'opacity-40')}>
         <span className="label-tech mr-1">Técnica</span>
-        {LAYERS.map((layer) => (
+        {TECH_UI.map((t) => (
           <button
-            key={layer}
+            key={t.tech}
             type="button"
-            disabled={!activeLayer}
-            aria-pressed={activeLayer === layer}
-            title={LAYER_HINT[layer]}
-            className={cn(btn, activeLayer === layer && 'border-fg bg-white/10')}
-            onClick={() => void setLayer(layer)}
+            disabled={!activeTech || !!crop}
+            aria-pressed={activeTech === t.tech}
+            title={t.hint}
+            className={cn(btn, activeTech === t.tech && 'border-fg bg-white/10')}
+            onClick={() => setTech(t.tech)}
           >
-            {LAYER_LABEL[layer]}
+            {t.label}
           </button>
         ))}
-        <span className="font-editorial text-[14px] font-light text-muted italic">{activeLayer ? LAYER_HINT[activeLayer] : 'Elija un diseño del plano.'}</span>
+        <span className="font-editorial text-[14px] font-light text-muted italic">{hintOf(activeTech)}</span>
       </div>
 
-      <div className={cn('flex flex-wrap items-center gap-3 border-b border-line px-5 py-2.5', !hasSelection && 'opacity-40')}>
-        <span className="label-tech">Color de la pieza</span>
+      <div className={cn('flex flex-wrap items-center gap-3 border-b border-line px-5 py-2.5', (!hasSelection || tonal) && 'opacity-40')}>
+        <span className="label-tech">{activeTech && TECHNIQUE_INFO[activeTech].layer === 'embroidery' ? 'Color del hilo' : 'Color de la tinta'}</span>
         {SWATCHES.map((hex) => (
           <button
             key={hex}
             type="button"
-            disabled={!hasSelection}
+            disabled={!hasSelection || tonal}
             aria-label={`Color ${hex}`}
             title={hex}
             className="size-5 border border-white/25"
@@ -508,7 +812,7 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
         <input
           type="color"
           aria-label="Otro color"
-          disabled={!hasSelection}
+          disabled={!hasSelection || tonal}
           className="h-5 w-8 cursor-pointer border border-white/25 bg-transparent"
           onChange={(e) => {
             const canvas = canvasRef.current;
@@ -517,11 +821,13 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
             tintObject(obj as Styled, e.target.value);
             canvas.requestRenderAll();
             schedulePrint();
+            record();
           }}
         />
-        <button type="button" disabled={!hasSelection} className="label-tech underline" onClick={withActive((obj) => restoreObject(obj as Styled))}>
+        <button type="button" disabled={!hasSelection || tonal} className="label-tech underline" onClick={withActive((obj) => restoreObject(obj as Styled))}>
           Original
         </button>
+        {tonal && <span className="font-editorial text-[14px] font-light text-muted italic">El hilo toma el color del tejido.</span>}
       </div>
 
       <div ref={boxRef} className="relative min-h-0 flex-1 overflow-hidden bg-[#0d0d0d] p-3">
@@ -539,9 +845,7 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
               {notice}
             </p>
           )}
-          {!analysis && (
-            <p className="label-tech absolute inset-0 grid place-items-center text-center">Preparando el patrón…</p>
-          )}
+          {!analysis && <p className="label-tech absolute inset-0 grid place-items-center text-center">Preparando el patrón…</p>}
         </div>
       </div>
     </section>

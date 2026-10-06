@@ -61,7 +61,7 @@ export function PatternShell() {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div className="min-h-0 border-r border-line">
-          <PatternEditor analysis={analysis} mode={mode} />
+          <PatternEditor analysis={analysis} mode={mode} garmentColor={garmentColor} />
         </div>
 
         <section className="relative min-h-0 bg-[#151515]">
