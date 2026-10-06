@@ -2,11 +2,29 @@
 
 import type { Texture } from 'three';
 import type { TextureLayer } from '@/lib/fabric/registry';
-import type { DecalPatch } from '@/lib/three/decalPlacement';
+import { PRINT_MIN_FACING, type DecalPatch } from '@/lib/three/decalPlacement';
 import { useReflectionEnv } from './useReflectionEnv';
 import { fabricAlbedo } from '@/lib/three/fabricShading';
 
 const POLYGON_OFFSET = -10;
+
+/**
+ * Corte limpio por píxel: no se pinta donde la superficie se aleja demasiado
+ * del proyector (el dibujo se estiraría) ni al otro lado del plano medio de la
+ * prenda. Los dos valores llegan por vértice en el atributo `cut` y se
+ * interpolan, de modo que el borde es una curva continua y no dientes de sierra.
+ */
+function cutBeforeCompile(shader: { vertexShader: string; fragmentShader: string }) {
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute vec2 cut;\nvarying vec2 vCut;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCut = cut;');
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying vec2 vCut;')
+    .replace(
+      '#include <clipping_planes_fragment>',
+      `#include <clipping_planes_fragment>\nif (vCut.x < ${PRINT_MIN_FACING.toFixed(3)} || vCut.y < 0.0) discard;`,
+    );
+}
 
 /** Propiedades pedidas para simular tinta reflectante tipo 3M Scotchlite / D3O. */
 const REFLECTIVE = {
@@ -75,6 +93,8 @@ export function PrintDecal({
     polygonOffset: true,
     polygonOffsetFactor: offset,
     wireframe: debug,
+    onBeforeCompile: cutBeforeCompile,
+    customProgramCacheKey: () => 'print-cut',
   };
 
   return (

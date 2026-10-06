@@ -18,8 +18,14 @@ import { HPS_Y, PX_PER_CM, VIEW_SPECS, getDesignZoneRect, type HoodieView } from
 
 /** Holgura (m) del proyector por delante y por detrás del tejido. */
 const DEPTH_PADDING_M = 0.1;
-/** Una cara se estampa si su normal apunta al proyector con al menos este coseno. */
-const MIN_FACING = 0.2;
+/**
+ * Una cara se estampa si su normal apunta al proyector con al menos este coseno
+ * (≈ 66°). Más abajo la proyección ortográfica estira el dibujo en rayas por
+ * los costados, que es justo lo que no puede salir en un archivo para fábrica.
+ */
+export const PRINT_MIN_FACING = 0.4;
+/** La geometría conserva un margen más amplio: el corte limpio lo hace el material por píxel. */
+const KEEP_FACING = 0.25;
 /** Un panel cuenta como tejido si su mayor dimensión es al menos este % de la del modelo. */
 const MIN_PANEL_RATIO = 0.2;
 /** Una malla es "principal" si mide al menos este % de la altura del modelo. */
@@ -33,6 +39,11 @@ export interface DecalProjector {
   size: Vector3;
   /** Paneles del tejido sobre los que se proyecta. */
   meshes: Mesh[];
+  /**
+   * Plano medio de la prenda (z de mundo): la espalda sólo imprime por detrás
+   * de él y el frente por delante, así un diseño nunca pasa al otro lado.
+   */
+  zMid: number;
 }
 
 /** Parche de decal ya recortado sobre un panel, en coordenadas de mundo. */
@@ -122,9 +133,23 @@ export function computeProjector(root: Object3D, view: HoodieView, { hpsY, scale
   meshes.forEach((m) => box.expandByObject(m));
   const depth = box.max.z - box.min.z + DEPTH_PADDING_M * 2;
 
+  // Plano medio: la z media de los vértices del tejido (sigue el cuerpo, no las mangas).
+  const v = new Vector3();
+  let sum = 0;
+  let count = 0;
+  for (const mesh of meshes) {
+    const pos = mesh.geometry.getAttribute('position');
+    const step = Math.max(1, Math.floor(pos.count / 4000));
+    for (let i = 0; i < pos.count; i += step) {
+      sum += v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld).z;
+      count++;
+    }
+  }
+
   return {
     view,
     meshes,
+    zMid: count ? sum / count : (box.max.z + box.min.z) / 2,
     position: new Vector3(0, centerY, (box.max.z + box.min.z) / 2),
     // De espalda el proyector gira 180° para que el gráfico se lea sin espejo.
     rotation: new Euler(0, view === 'front' ? 0 : Math.PI, 0),
@@ -135,6 +160,7 @@ export function computeProjector(root: Object3D, view: HoodieView, { hpsY, scale
 /** Genera un parche por panel con la misma proyección y descarta las caras que no miran al proyector. */
 export function buildDecalPatches(projector: DecalProjector): DecalPatch[] {
   const toward = new Vector3(0, 0, projector.view === 'front' ? 1 : -1);
+  const side = projector.view === 'back' ? -1 : 1;
   const patches: DecalPatch[] = [];
   const a = new Vector3();
   const b = new Vector3();
@@ -155,21 +181,30 @@ export function buildDecalPatches(projector: DecalProjector): DecalPatch[] {
     const keptPos: number[] = [];
     const keptUv: number[] = [];
     const keptNormal: number[] = [];
+    // Por vértice: cuánto mira al proyector y a qué lado del plano medio está.
+    // El material descarta los píxeles fuera de rango, así el borde sale limpio y continuo.
+    const keptCut: number[] = [];
+    const facing = [0, 0, 0];
     for (let i = 0; i + 2 < pos.count; i += 3) {
-      if (normal) {
-        n.set(0, 0, 0);
-        for (let k = 0; k < 3; k++) n.add(a.fromBufferAttribute(normal, i + k));
-      } else {
+      if (!normal) {
         a.fromBufferAttribute(pos, i);
         b.fromBufferAttribute(pos, i + 1);
         c.fromBufferAttribute(pos, i + 2);
-        n.copy(b.sub(a)).cross(c.sub(a));
+        n.copy(b.sub(a)).cross(c.sub(a)).normalize();
       }
-      if (n.normalize().dot(toward) < MIN_FACING) continue;
+      let bestFacing = -1;
+      let bestSide = -1;
+      for (let k = 0; k < 3; k++) {
+        facing[k] = normal ? n.fromBufferAttribute(normal, i + k).normalize().dot(toward) : n.dot(toward);
+        bestFacing = Math.max(bestFacing, facing[k]);
+        bestSide = Math.max(bestSide, (pos.getZ(i + k) - projector.zMid) * side);
+      }
+      if (bestFacing < KEEP_FACING || bestSide < 0) continue;
       for (let k = 0; k < 3; k++) {
         keptPos.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
         keptUv.push(uv.getX(i + k), uv.getY(i + k));
         if (normal) keptNormal.push(normal.getX(i + k), normal.getY(i + k), normal.getZ(i + k));
+        keptCut.push(facing[k], (pos.getZ(i + k) - projector.zMid) * side);
       }
     }
     raw.dispose();
@@ -178,6 +213,7 @@ export function buildDecalPatches(projector: DecalProjector): DecalPatch[] {
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new Float32BufferAttribute(keptPos, 3));
     geometry.setAttribute('uv', new Float32BufferAttribute(keptUv, 2));
+    geometry.setAttribute('cut', new Float32BufferAttribute(keptCut, 2));
     if (keptNormal.length) geometry.setAttribute('normal', new Float32BufferAttribute(keptNormal, 3));
     geometry.computeBoundingSphere();
     patches.push({ mesh, geometry });
