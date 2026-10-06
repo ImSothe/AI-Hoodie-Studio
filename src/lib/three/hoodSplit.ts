@@ -8,6 +8,9 @@ import { BODY_Z_UNDER_HOOD, MODEL_HPS_Y } from './modelConfig';
  * que comparten material y atributos con el original, para poder moverlas sin
  * tocar el cuerpo. Devuelve las mallas de la capucha.
  */
+/** Holgura (m) alrededor de la caja de la capucha para no dejar tiras de su borde en el cuerpo. */
+const HOOD_EDGE_MARGIN_M = 0.03;
+
 export function splitHood(root: Object3D): Mesh[] {
   root.updateMatrixWorld(true);
   const panels = garmentMeshes(root);
@@ -37,7 +40,7 @@ export function splitHood(root: Object3D): Mesh[] {
     let sticksOut = false;
     for (let i = 0; i < pos.count; i++) {
       a.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
-      if (a.x > box.min.x && a.x < box.max.x && a.y > box.min.y && (a.z < zLo || a.z > zHi)) {
+      if (a.x > box.min.x && a.x < box.max.x && a.y > box.min.y - HOOD_EDGE_MARGIN_M && (a.z < zLo || a.z > zHi)) {
         sticksOut = true;
         break;
       }
@@ -52,7 +55,7 @@ export function splitHood(root: Object3D): Mesh[] {
       const x = (a.x + b.x + c.x) / 3;
       const y = (a.y + b.y + c.y) / 3;
       const z = (a.z + b.z + c.z) / 3;
-      const inHood = x > box.min.x && x < box.max.x && y > box.min.y && (sticksOut || z < zLo || z > zHi);
+      const inHood = x > box.min.x - HOOD_EDGE_MARGIN_M && x < box.max.x + HOOD_EDGE_MARGIN_M && y > box.min.y - HOOD_EDGE_MARGIN_M && (sticksOut || z < zLo || z > zHi);
       (inHood ? hood : rest).push(ia, ib, ic);
     }
     if (!hood.length) continue;

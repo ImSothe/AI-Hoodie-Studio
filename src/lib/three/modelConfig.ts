@@ -42,5 +42,5 @@ export const BODY_Z_UNDER_HOOD: [number, number] = [-0.105, 0.125];
 
 /** Levantar capucha: bisagra en el cuello (z de mundo), giro hacia atrás y subida (m). */
 export const HOOD_PIVOT_Z = -0.05;
-export const HOOD_TILT_RAD = (24 * Math.PI) / 180;
-export const HOOD_LIFT_M = 0.06;
+export const HOOD_TILT_RAD = (10 * Math.PI) / 180;
+export const HOOD_LIFT_M = 0.15;
