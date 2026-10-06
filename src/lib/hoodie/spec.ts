@@ -77,14 +77,26 @@ export function getPrintAreaRect(view: HoodieView): Rect {
   };
 }
 
+/** Zona de diseño: ancho máximo (cm) sobre el torso; sin mangas ni hombros. */
+export const DESIGN_ZONE_WIDTH_CM = 40;
+export const DESIGN_ZONE_HEIGHT_CM = 50;
+/** Arranca bajo el HPS para no cortar sobre los hombros ni la capucha. */
+export const DESIGN_ZONE_TOP_FROM_HPS_CM = 8;
+
 /**
- * Zona de diseño: TODA la pieza (cuerpo, mangas y capucha). Es la región del
- * lienzo que se vuelca a la textura 3D y se proyecta sobre el modelo. El área
- * de impresión de arriba es sólo la zona recomendada del cuerpo (guía y cotas
- * del dossier); un gráfico puede salirse de ella y cruzar costuras y mangas.
+ * Zona de diseño: la región del lienzo que se vuelca a la textura 3D y se
+ * proyecta sobre el modelo. Está limitada al torso (40 cm de ancho, centrada en
+ * el eje de la prenda): lo que quede fuera no se estampa, así el gráfico nunca
+ * se desborda hacia los hombros, las mangas o la capucha.
  */
 export function getDesignZoneRect(_view?: HoodieView): Rect {
-  return { left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
+  const width = DESIGN_ZONE_WIDTH_CM * PX_PER_CM;
+  return {
+    left: CENTER_X - width / 2,
+    top: HPS_Y + DESIGN_ZONE_TOP_FROM_HPS_CM * PX_PER_CM,
+    width,
+    height: DESIGN_ZONE_HEIGHT_CM * PX_PER_CM,
+  };
 }
 
 export const pxToCm = (px: number) => px / PX_PER_CM;
