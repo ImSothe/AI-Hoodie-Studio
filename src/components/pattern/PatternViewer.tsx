@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
-import { Box3, BufferAttribute, MeshPhysicalMaterial, NeutralToneMapping, Vector3, type Mesh } from 'three';
+import { Box3, BufferAttribute, MeshPhysicalMaterial, NeutralToneMapping, Vector3, type Mesh, type Texture } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { analyzePattern, attachPatternUv, type PatternAnalysis } from '@/lib/pattern/analysis';
 import type { PatternMode } from '@/lib/pattern/layout';
@@ -28,6 +28,14 @@ function PatternGarment({
   const rotationY = useCalibration((s) => s.rotationY);
   // Uniform compartido por todos los materiales: 0 = tendidos unidos, 1 = piezas sueltas.
   const piecesMode = useMemo(() => ({ value: 0 }), []);
+  // Texturas de las capas reflectante y de bordado (la de estampado es `map`).
+  const layerUniforms = useMemo(
+    () => ({
+      refl: { value: getPrintTexture('joined', 'reflective') as Texture },
+      emb: { value: getPrintTexture('joined', 'embroidery') as Texture },
+    }),
+    [],
+  );
 
   const { root, materials, analysis } = useMemo(() => {
     const root = scene.clone(true);
@@ -62,14 +70,19 @@ function PatternGarment({
         new BufferAttribute(analysis.masks.get(mesh) ?? new Float32Array(count).fill(1), 1),
       );
       const mat = new MeshPhysicalMaterial({ ...FABRIC_MATERIAL });
+      mat.map = getPrintTexture('joined', 'print'); // el shader necesita el mapa desde el primer compilado
       mat.normalMap = knitNormalMap();
       mat.normalScale.set(0.24, 0.24);
-      // El mapa no multiplica el color de la tela: la estampa se pinta encima, con su transparencia,
-      // y sólo en la capa exterior (el forro no recibe dibujo). En el modo unido se muestrean los dos
-      // tendidos (delantero y espalda) del mismo lienzo y se superponen: las mangas y la capucha salen
-      // en ambos, y lo que se pinte en cualquiera se ve en la prenda.
+      // El mapa no multiplica el color de la tela: el diseño se pinta encima, con su transparencia, y sólo en la
+      // capa exterior (el forro no recibe dibujo). Tres capas, una por técnica, con su aspecto:
+      //  - estampado: tinta plana y mate;  - reflectante: más metálico, liso y con algo de brillo propio;
+      //  - bordado: hilo con puntadas, relieve (la altura sale del contorno difuminado) y brillo satinado.
+      // En el modo unido se muestrean los dos tendidos (delantero y espalda) y se superponen: las mangas
+      // y la capucha salen en ambos, y lo que se pinte en cualquiera se ve en la prenda.
       mat.onBeforeCompile = (shader) => {
         shader.uniforms.uPieces = piecesMode;
+        shader.uniforms.uRefl = layerUniforms.refl;
+        shader.uniforms.uEmb = layerUniforms.emb;
         shader.vertexShader = shader.vertexShader
           .replace(
             '#include <common>',
@@ -95,6 +108,8 @@ function PatternGarment({
             [
               '#include <common>',
               'uniform float uPieces;',
+              'uniform sampler2D uRefl;',
+              'uniform sampler2D uEmb;',
               'varying float vPrintMask;',
               'varying vec2 vUvFront;',
               'varying vec2 vUvBack;',
@@ -102,21 +117,67 @@ function PatternGarment({
             ].join('\n'),
           )
           .replace(
+            '#include <map_pars_fragment>',
+            [
+              '#include <map_pars_fragment>',
+              'vec4 overRgba(vec4 a, vec4 b) {',
+              '  float alpha = a.a + b.a * (1.0 - a.a);',
+              '  vec3 rgb = (a.rgb * a.a + b.rgb * b.a * (1.0 - a.a)) / max(alpha, 0.0001);',
+              '  return vec4(rgb, alpha);',
+              '}',
+              'vec4 sampleLayer(sampler2D t) {',
+              '  if (uPieces > 0.5) return texture2D(t, vUvPieces);',
+              '  return overRgba(texture2D(t, vUvFront), texture2D(t, vUvBack));',
+              '}',
+              'vec4 sampleLayerBlur(sampler2D t, float lod) {',
+              '  if (uPieces > 0.5) return textureLod(t, vUvPieces, lod);',
+              '  return overRgba(textureLod(t, vUvFront, lod), textureLod(t, vUvBack, lod));',
+              '}',
+            ].join('\n'),
+          )
+          .replace(
             '#include <map_fragment>',
             [
-              '#ifdef USE_MAP',
-              '  vec4 printColor;',
-              '  if (uPieces > 0.5) {',
-              '    printColor = texture2D( map, vUvPieces );',
-              '  } else {',
-              '    vec4 pa = texture2D( map, vUvFront );',
-              '    vec4 pb = texture2D( map, vUvBack );',
-              '    float alpha = pa.a + pb.a * (1.0 - pa.a);',
-              '    vec3 rgb = (pa.rgb * pa.a + pb.rgb * pb.a * (1.0 - pa.a)) / max(alpha, 0.0001);',
-              '    printColor = vec4(rgb, alpha);',
+              '  vec4 pPrint = sampleLayer(map);',
+              '  vec4 pRefl = sampleLayer(uRefl);',
+              '  vec4 pEmb = sampleLayer(uEmb);',
+              '  float aPrint = pPrint.a * vPrintMask;',
+              '  float aRefl = pRefl.a * vPrintMask;',
+              '  float aEmb = pEmb.a * vPrintMask;',
+              '  vec2 stitchUv = (vUvFront.x + vUvFront.y > 0.001) ? vUvFront : ((uPieces > 0.5) ? vUvPieces : vUvBack);',
+              '  float stitch = 0.84 + 0.16 * sin((stitchUv.x * 2600.0 + stitchUv.y * 1300.0) * 0.55);',
+              '  diffuseColor.rgb = mix( diffuseColor.rgb, pPrint.rgb, aPrint );',
+              '  diffuseColor.rgb = mix( diffuseColor.rgb, pRefl.rgb, aRefl );',
+              '  diffuseColor.rgb = mix( diffuseColor.rgb, pEmb.rgb * stitch, aEmb );',
+            ].join('\n'),
+          )
+          .replace(
+            '#include <roughnessmap_fragment>',
+            ['#include <roughnessmap_fragment>', '  roughnessFactor = mix( roughnessFactor, 0.14, aRefl );', '  roughnessFactor = mix( roughnessFactor, 0.34, aEmb );'].join('\n'),
+          )
+          .replace(
+            '#include <metalnessmap_fragment>',
+            ['#include <metalnessmap_fragment>', '  metalnessFactor = mix( metalnessFactor, 0.85, aRefl );'].join('\n'),
+          )
+          .replace(
+            '#include <emissivemap_fragment>',
+            ['#include <emissivemap_fragment>', '  totalEmissiveRadiance += pRefl.rgb * aRefl * 0.14;'].join('\n'),
+          )
+          .replace(
+            '#include <normal_fragment_maps>',
+            [
+              '#include <normal_fragment_maps>',
+              '  {',
+              '    float height = sampleLayerBlur(uEmb, 2.2).a * vPrintMask;',
+              '    vec2 dHdxy = vec2( dFdx( height ), dFdy( height ) ) * 90.0;',
+              '    vec3 sigmaX = dFdx( - vViewPosition.xyz );',
+              '    vec3 sigmaY = dFdy( - vViewPosition.xyz );',
+              '    vec3 R1 = cross( sigmaY, normal );',
+              '    vec3 R2 = cross( normal, sigmaX );',
+              '    float fDet = dot( sigmaX, R1 ) * faceDirection;',
+              '    vec3 vGrad = sign( fDet ) * ( dHdxy.x * R1 + dHdxy.y * R2 );',
+              '    normal = normalize( abs( fDet ) * normal - vGrad );',
               '  }',
-              '  diffuseColor.rgb = mix( diffuseColor.rgb, printColor.rgb, printColor.a * vPrintMask );',
-              '#endif',
             ].join('\n'),
           );
       };
@@ -125,18 +186,20 @@ function PatternGarment({
       materials.push(mat);
     });
     return { root, materials, analysis };
-  }, [scene, rotationY, piecesMode]);
+  }, [scene, rotationY, piecesMode, layerUniforms]);
 
   useEffect(() => onAnalysis(analysis), [analysis, onAnalysis]);
   // Cada modo lee su propia textura (y su propio juego de UV).
   useEffect(() => {
     piecesMode.value = mode === 'pieces' ? 1 : 0;
-    const texture = getPrintTexture(mode);
+    layerUniforms.refl.value = getPrintTexture(mode, 'reflective');
+    layerUniforms.emb.value = getPrintTexture(mode, 'embroidery');
+    const texture = getPrintTexture(mode, 'print');
     materials.forEach((m) => {
       m.map = texture;
       m.needsUpdate = true;
     });
-  }, [materials, mode, piecesMode]);
+  }, [materials, mode, piecesMode, layerUniforms]);
   useEffect(() => {
     materials.forEach((m) => m.color.set(color));
   }, [materials, color]);

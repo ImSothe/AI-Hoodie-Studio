@@ -36,7 +36,6 @@ export function drawPatternGuide(ctx: CanvasRenderingContext2D, analysis: Patter
       if (!transform) continue;
       const path = pathOf(island, transform);
       ctx.fill(path, 'nonzero');
-      ctx.stroke(path);
     }
   }
   if (!labels) return;

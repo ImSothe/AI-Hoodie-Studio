@@ -1,16 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { Canvas, FabricImage, loadSVGFromString, util, type FabricObject } from 'fabric';
+import { Canvas, FabricImage, Point, Rect, loadSVGFromString, util, type FabricObject } from 'fabric';
 import { importFiles } from '@/lib/assets/importFiles';
 import { TEMPLATES, templateAsset } from '@/lib/assets/templates';
+import { layerOfObject } from '@/lib/fabric/editor';
 import { restoreObject, tintObject, type Styled } from '@/lib/fabric/tint';
+import { TECHNIQUE_INFO, techniqueOf, type TechniqueLayer } from '@/lib/hoodie/spec';
 import { sizeOf } from '@/lib/pattern/layout';
 import type { PatternAnalysis } from '@/lib/pattern/analysis';
 import { drawPatternGuide } from '@/lib/pattern/guide';
 import type { PatternMode } from '@/lib/pattern/layout';
 import { bakeToPieces } from '@/lib/pattern/bake';
-import { bindPrintSource, exportPatternPng, renderSource, schedulePrint, setPrintMode } from '@/lib/pattern/print';
+import { LAYERS, bindPrintSource, exportPatternPng, layerInUse, renderLayer, schedulePrint, setPrintMode } from '@/lib/pattern/print';
 import type { GeneratedAsset } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +28,30 @@ async function createObject(asset: GeneratedAsset): Promise<FabricObject> {
     );
   }
   return FabricImage.fromURL(asset.src);
+}
+
+const SAVED_PROPS = ['hoodieRole', 'assetName', 'tecnica'];
+const LAYER_LABEL: Record<TechniqueLayer, string> = { print: 'Estampado', reflective: 'Reflectante', embroidery: 'Bordado' };
+const LAYER_HINT: Record<TechniqueLayer, string> = {
+  print: 'Tinta plana y mate. Lo más versátil.',
+  reflective: 'Brilla con el flash: metálico y liso.',
+  embroidery: 'Hilo con puntadas y relieve. Para logos y detalles.',
+};
+
+/** Tiradores grandes y visibles: el lienzo se ve reducido en pantalla, así que se dimensionan según la escala. */
+function styleControls(obj: FabricObject, scale: number) {
+  obj.set({
+    cornerStyle: 'circle',
+    cornerSize: 26 / scale,
+    touchCornerSize: 44 / scale,
+    transparentCorners: false,
+    cornerColor: '#ffffff',
+    cornerStrokeColor: '#111111',
+    borderColor: '#ffffff',
+    borderScaleFactor: 2.5 / scale,
+    borderDashArray: [10 / scale, 6 / scale],
+    padding: 4 / scale,
+  });
 }
 
 const btn =
@@ -49,6 +75,17 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
   const [hasSelection, setHasSelection] = useState(false);
   const [labels, setLabels] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [activeLayer, setActiveLayer] = useState<TechniqueLayer | null>(null);
+  const [clipped, setClipped] = useState(false);
+  const [crop, setCrop] = useState<{ target: FabricObject; rect: Rect } | null>(null);
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
 
   // Lienzo de Fabric (resolución completa del patrón; en pantalla sólo se escala por CSS).
   useEffect(() => {
@@ -69,7 +106,13 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     canvasRef.current = canvas;
     bindPrintSource(canvas);
     const offs = EVENTS.map((evt) => canvas.on(evt, schedulePrint));
-    const sel = () => setHasSelection(canvas.getActiveObjects().length > 0);
+    const sel = () => {
+      const active = canvas.getActiveObject();
+      setHasSelection(canvas.getActiveObjects().length > 0);
+      const design = active && (active as FabricObject & { hoodieRole?: string }).hoodieRole === 'design' ? active : null;
+      setActiveLayer(design ? layerOfObject(design) : null);
+      setClipped(!!design?.clipPath);
+    };
     offs.push(canvas.on('selection:created', sel), canvas.on('selection:updated', sel), canvas.on('selection:cleared', sel));
 
     const onKey = (e: KeyboardEvent) => {
@@ -129,6 +172,14 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     canvas.setDimensions({ width: `${size.w * scale}px`, height: `${size.h * scale}px` }, { cssOnly: true });
   }, [scale, size.w, size.h]);
 
+  // Tiradores visibles para cualquier escala de pantalla.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.getObjects().forEach((o) => styleControls(o, scale));
+    canvas.requestRenderAll();
+  }, [scale, mode]);
+
   // Guía: las piezas planas con su nombre.
   useEffect(() => {
     const guide = guideRef.current;
@@ -146,13 +197,14 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || modeRef.current === mode) return;
-    saved.current[modeRef.current] = canvas.toObject(['hoodieRole', 'assetName']);
+    saved.current[modeRef.current] = canvas.toObject(SAVED_PROPS);
     modeRef.current = mode;
     canvas.discardActiveObject();
     canvas.clear();
     // Cada modo tiene su propio lienzo, con su propio tamaño.
     canvas.setDimensions({ width: sizeOf(mode).w, height: sizeOf(mode).h }, { backstoreOnly: true });
     void canvas.loadFromJSON(saved.current[mode] ?? { objects: [] }).then(() => {
+      canvas.getObjects().forEach((o) => styleControls(o, scaleRef.current));
       canvas.requestRenderAll();
       setPrintMode(mode);
     });
@@ -167,6 +219,7 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
       const k = (Math.min(w, h) * 0.3) / Math.max(obj.width || 1, obj.height || 1);
       obj.set({ originX: 'center', originY: 'center', left: w / 2, top: h / 2, scaleX: k, scaleY: k });
       Object.assign(obj, { hoodieRole: 'design', assetName: asset.name });
+      styleControls(obj, scaleRef.current);
       canvas.add(obj);
       canvas.setActiveObject(obj);
     }
@@ -194,6 +247,70 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     schedulePrint();
   };
 
+  const setLayer = (layer: TechniqueLayer) =>
+    withActive((obj) => {
+      obj.set('tecnica' as never, techniqueOf(layer) as never);
+      setActiveLayer(layer);
+    })();
+
+  // Recortar: un rectángulo ajustable sobre la pieza; al aplicarlo se queda como recorte de la propia pieza.
+  const startCrop = () => {
+    const canvas = canvasRef.current;
+    const target = canvas?.getActiveObject();
+    if (!canvas || !target) return;
+    const b = target.getBoundingRect();
+    const rect = new Rect({
+      left: b.left + b.width * 0.1,
+      top: b.top + b.height * 0.1,
+      width: b.width * 0.8,
+      height: b.height * 0.8,
+      fill: 'rgba(255,255,255,0.12)',
+      stroke: '#ffffff',
+      strokeWidth: 3 / scaleRef.current,
+      strokeUniform: true,
+      strokeDashArray: [18 / scaleRef.current, 12 / scaleRef.current],
+      objectCaching: false,
+    });
+    styleControls(rect, scaleRef.current);
+    canvas.add(rect);
+    canvas.setActiveObject(rect);
+    canvas.requestRenderAll();
+    setCrop({ target, rect });
+  };
+  const finishCrop = (apply: boolean) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !crop) return;
+    const { target, rect } = crop;
+    if (apply) {
+      // El rectángulo (en el plano) se pasa al espacio de la pieza, que puede estar escalada o girada.
+      const inverse = util.invertTransform(target.calcTransformMatrix());
+      const r = rect.getBoundingRect();
+      const corners = [
+        new Point(r.left, r.top),
+        new Point(r.left + r.width, r.top),
+        new Point(r.left + r.width, r.top + r.height),
+        new Point(r.left, r.top + r.height),
+      ].map((p) => p.transform(inverse));
+      const xs = corners.map((p) => p.x);
+      const ys = corners.map((p) => p.y);
+      target.clipPath = new Rect({
+        left: (Math.min(...xs) + Math.max(...xs)) / 2,
+        top: (Math.min(...ys) + Math.max(...ys)) / 2,
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+        originX: 'center',
+        originY: 'center',
+      });
+      target.dirty = true;
+    }
+    canvas.remove(rect);
+    canvas.setActiveObject(target);
+    canvas.requestRenderAll();
+    schedulePrint();
+    setCrop(null);
+    setClipped(!!target.clipPath);
+  };
+
   const download = () => {
     const a = document.createElement('a');
     a.href = exportPatternPng();
@@ -211,10 +328,16 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     setExporting(true);
     try {
       await new Promise((r) => setTimeout(r, 30)); // deja pintar el aviso antes del cálculo
-      const art =
-        mode === 'joined'
-          ? bakeToPieces(analysis, renderSource(2) ?? document.createElement('canvas'))
-          : (renderSource(1) ?? document.createElement('canvas'));
+      const used = LAYERS.filter(layerInUse);
+      if (!used.length) {
+        setNotice('Aún no hay ningún diseño en el plano.');
+        return;
+      }
+      // Un archivo por técnica: el taller imprime, borda o aplica reflectante por separado.
+      const arts = used.map((layer) => {
+        const raw = renderLayer(layer, mode === 'joined' ? 2 : 1) ?? document.createElement('canvas');
+        return { layer, canvas: mode === 'joined' ? bakeToPieces(analysis, raw) : raw };
+      });
       const outline = document.createElement('canvas');
       outline.width = sizeOf('pieces').w;
       outline.height = sizeOf('pieces').h;
@@ -222,17 +345,23 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
       octx.fillStyle = '#3a3a3a';
       octx.fillRect(0, 0, outline.width, outline.height);
       drawPatternGuide(octx, analysis, 'pieces', true);
-      octx.globalCompositeOperation = 'source-over';
-      octx.drawImage(art, 0, 0);
+      for (const { canvas } of arts) octx.drawImage(canvas, 0, 0);
       const blobOf = (c: HTMLCanvasElement) => new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/png'));
       const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
-      zip.file('estampado-por-piezas.png', await blobOf(art));
+      const lines: string[] = [];
+      for (const { layer, canvas } of arts) {
+        const info = TECHNIQUE_INFO[techniqueOf(layer)];
+        const name = `${info.code}-${info.slug}.png`;
+        zip.file(name, await blobOf(canvas));
+        lines.push(`${name}: ${LAYER_LABEL[layer]} (${techniqueOf(layer)}). ${info.note}`);
+      }
       zip.file('plano-con-nombres.png', await blobOf(outline));
       zip.file(
         'LEEME.txt',
-        'estampado-por-piezas.png: el diseño ya cortado en las piezas de taller (fondo transparente), una sola imagen con todas las piezas.\n' +
-          'plano-con-nombres.png: lo mismo sobre las siluetas de cada pieza, con su nombre, para que el taller sepa cuál es cuál.\n' +
+        'Diseño cortado en las piezas de taller, un archivo por técnica (fondo transparente, todas las piezas en una imagen):\n' +
+          lines.join('\n') +
+          '\n\nplano-con-nombres.png: todo sobre las siluetas de cada pieza, con su nombre, para que el taller sepa cuál es cuál.\n' +
           'Los dibujos que pasan de una pieza a otra encajan en las costuras. No incluyen margen de costura ni sangrado.\n',
       );
       const url = URL.createObjectURL(await zip.generateAsync({ type: 'blob' }));
@@ -275,7 +404,7 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
           disabled={!hasSelection}
           className={btn}
           onClick={withActive(async (obj, canvas) => {
-            const copy = await obj.clone(['hoodieRole', 'assetName']);
+            const copy = await obj.clone(SAVED_PROPS);
             copy.set({ left: obj.left + 40, top: obj.top + 40 });
             canvas.add(copy);
             canvas.setActiveObject(copy);
@@ -292,9 +421,38 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
         <button type="button" disabled={!hasSelection} className={btn} onClick={withActive((obj, canvas) => void canvas.sendObjectBackwards(obj))}>
           Bajar
         </button>
+        {crop ? (
+          <>
+            <button type="button" className={cn(btn, 'border-fg')} onClick={() => finishCrop(true)}>
+              Aplicar recorte
+            </button>
+            <button type="button" className={btn} onClick={() => finishCrop(false)}>
+              Cancelar
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" disabled={!hasSelection || !activeLayer} className={btn} onClick={startCrop} title="Deja sólo una parte del diseño">
+              Recortar
+            </button>
+            {clipped && (
+              <button
+                type="button"
+                className={btn}
+                onClick={withActive((obj) => {
+                  obj.clipPath = undefined;
+                  obj.dirty = true;
+                  setClipped(false);
+                })}
+              >
+                Quitar recorte
+              </button>
+            )}
+          </>
+        )}
         <button
           type="button"
-          disabled={!hasSelection}
+          disabled={!hasSelection || !!crop}
           className={btn}
           onClick={withActive((obj, canvas) => {
             canvas.discardActiveObject();
@@ -313,6 +471,24 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
         <button type="button" className={btn} disabled={!analysis || exporting} onClick={() => void downloadFactory()}>
           {exporting ? 'Preparando…' : 'Para fábrica (piezas)'}
         </button>
+      </div>
+
+      <div className={cn('flex flex-wrap items-center gap-2 border-b border-line px-5 py-2.5', !activeLayer && 'opacity-40')}>
+        <span className="label-tech mr-1">Técnica</span>
+        {LAYERS.map((layer) => (
+          <button
+            key={layer}
+            type="button"
+            disabled={!activeLayer}
+            aria-pressed={activeLayer === layer}
+            title={LAYER_HINT[layer]}
+            className={cn(btn, activeLayer === layer && 'border-fg bg-white/10')}
+            onClick={() => void setLayer(layer)}
+          >
+            {LAYER_LABEL[layer]}
+          </button>
+        ))}
+        <span className="font-editorial text-[14px] font-light text-muted italic">{activeLayer ? LAYER_HINT[activeLayer] : 'Elija un diseño del plano.'}</span>
       </div>
 
       <div className={cn('flex flex-wrap items-center gap-3 border-b border-line px-5 py-2.5', !hasSelection && 'opacity-40')}>
@@ -358,6 +534,11 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
             style={{ width: size.w * scale, height: size.h * scale }}
           />
           <div ref={hostRef} className="absolute inset-0" />
+          {notice && (
+            <p role="status" className="label-tech absolute top-2 left-1/2 -translate-x-1/2 bg-black/80 px-3 py-2">
+              {notice}
+            </p>
+          )}
           {!analysis && (
             <p className="label-tech absolute inset-0 grid place-items-center text-center">Preparando el patrón…</p>
           )}
