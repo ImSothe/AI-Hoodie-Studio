@@ -5,6 +5,7 @@ import type { Canvas } from 'fabric';
 import { createDesignCanvas, fitCanvasToBox, getDesignObjects, syncCanvasState } from '@/lib/fabric/editor';
 import { applyGarmentColor } from '@/lib/fabric/garment';
 import { isTonal, tintObject, tonalInk, type Styled } from '@/lib/fabric/tint';
+import { disposeHistory, initHistory } from '@/lib/fabric/history';
 import { registerCanvas, unregisterCanvas } from '@/lib/fabric/registry';
 import type { HoodieView } from '@/lib/hoodie/spec';
 import { useStudio } from '@/lib/store';
@@ -45,6 +46,7 @@ export function FabricView({ view, visible, box }: Props) {
     const { canvas } = handle;
     canvasRef.current = canvas;
     registerCanvas(view, canvas);
+    initHistory(view, canvas);
     fitCanvasToBox(canvas, boxRef.current.width, boxRef.current.height);
 
     const sync = rafThrottle(() => syncCanvasState(canvas, view));
@@ -79,6 +81,7 @@ export function FabricView({ view, visible, box }: Props) {
       offColor();
       recolor.cancel();
       unregisterCanvas(view, canvas);
+      disposeHistory(view, canvas);
       canvasRef.current = null;
       void handle.dispose();
     };

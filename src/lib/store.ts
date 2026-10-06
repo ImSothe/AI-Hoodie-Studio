@@ -59,6 +59,10 @@ interface StudioState {
   stageMood: StageMood;
   /** Qué se está añadiendo en el paso Diseño (la barra «Añadir» del visor lo cambia). */
   designMode: DesignMode;
+  /** Qué se puede deshacer / rehacer en cada cara. */
+  history: Record<HoodieView, { undo: boolean; redo: boolean }>;
+  /** Editor de recorte abierto (rectángulo sobre la pieza seleccionada). */
+  cropEditorOpen: boolean;
   /** Editor de partes abierto (separar alas, adornos… de una pieza). */
   partsEditorOpen: boolean;
   /** La prenda gira sola mientras no se edita nada (si no, queda fija). */
@@ -94,6 +98,8 @@ interface StudioState {
   setStageMood: (mood: StageMood) => void;
   setDesignMode: (mode: DesignMode) => void;
   setPartsEditorOpen: (open: boolean) => void;
+  setCropEditorOpen: (open: boolean) => void;
+  setHistoryFlags: (view: HoodieView, flags: { undo: boolean; redo: boolean }) => void;
   setAutoRotate: (value: boolean) => void;
   setShowDetails: (value: boolean) => void;
   setSnapshot3d: (dataUrl: string | null) => void;
@@ -126,6 +132,8 @@ export const useStudio = create<StudioState>((set) => ({
   stageMood: 'nuit',
   designMode: 'images',
   partsEditorOpen: false,
+  cropEditorOpen: false,
+  history: { front: { undo: false, redo: false }, back: { undo: false, redo: false } },
   autoRotate: false,
   showDetails: false,
   snapshot3d: null,
@@ -163,6 +171,11 @@ export const useStudio = create<StudioState>((set) => ({
   setStageMood: (stageMood) => set({ stageMood }),
   setDesignMode: (designMode) => set({ designMode, sidebarTab: 'design' }),
   setPartsEditorOpen: (partsEditorOpen) => set({ partsEditorOpen }),
+  setCropEditorOpen: (cropEditorOpen) => set({ cropEditorOpen }),
+  setHistoryFlags: (view, flags) =>
+    set((s) =>
+      s.history[view].undo === flags.undo && s.history[view].redo === flags.redo ? {} : { history: { ...s.history, [view]: flags } },
+    ),
   setAutoRotate: (autoRotate) => set({ autoRotate }),
   setShowDetails: (showDetails) => set({ showDetails }),
   setSnapshot3d: (snapshot3d) => set({ snapshot3d }),

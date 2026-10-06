@@ -15,6 +15,7 @@ import { CalibrationPanel } from './CalibrationPanel';
 import { cameraPose } from './CameraRig';
 import { HoodieScene } from './HoodieScene';
 import { MissingModelPoster } from './MissingModelPoster';
+import { undo } from '@/lib/fabric/history';
 import { SelectionFrame } from './SelectionFrame';
 import { captureTransparent } from './snapshot';
 import { useModelStatus } from './useModelStatus';
@@ -59,6 +60,7 @@ export function HoodieViewer() {
   const stageMood = useStudio((s) => s.stageMood);
   const autoRotate = useStudio((s) => s.autoRotate);
   const showDetails = useStudio((s) => s.showDetails);
+  const canUndo = useStudio((s) => s.history[s.activeView].undo);
   const { requestCamera, focusView, setSnapshot3d } = useStudio.getState();
   const getThree = useRef<(() => RootState) | null>(null);
   const [flash, setFlash] = useState(false);
@@ -214,6 +216,15 @@ export function HoodieViewer() {
         </div>
         {ready && (
           <div className="pointer-events-auto flex shrink-0 gap-2">
+            <button
+              type="button"
+              disabled={!canUndo}
+              onClick={() => undo(activeView)}
+              title="Revierte el último cambio (Ctrl+Z)"
+              className="border border-fg/20 px-3 py-2 text-[10px] tracking-[0.22em] text-fg uppercase transition hover:border-fg/60 disabled:opacity-30 disabled:hover:border-fg/20"
+            >
+              ↶ Deshacer
+            </button>
             <button
               type="button"
               onClick={() => useStudio.getState().setStageMood(stageMood === 'nuit' ? 'salon' : 'nuit')}

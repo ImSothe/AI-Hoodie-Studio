@@ -69,6 +69,8 @@ export function ProductLighting({ mood }: { mood: StageMood }) {
         {/* Contraluces: detrás y arriba, uno a cada lado; recortan hombros, capucha y mangas */}
         <directionalLight position={[2.8, 2.4, -2.2]} intensity={stage.rimIntensity} color="#f7f8fb" />
         <directionalLight position={[-2.8, 2.4, -2.2]} intensity={stage.rimIntensity} color="#f7f8fb" />
+        {/* Contraluz cenital: perfila la capucha y la línea de hombros desde atrás y arriba */}
+        <directionalLight position={[0, 3.4, -2.6]} intensity={stage.rimIntensity * 0.75} color="#f7f8fb" />
       </group>
     </>
   );

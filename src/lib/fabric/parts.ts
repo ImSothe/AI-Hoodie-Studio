@@ -112,3 +112,89 @@ export async function createPart(
   syncCanvasState(canvas, view);
   return partImage;
 }
+
+export interface CropRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Recorta una pieza a un rectángulo (en píxeles del bitmap que devuelve
+ * `rasterizeForParts`). La pieza recortada ocupa exactamente el mismo sitio y
+ * tamaño que esa zona tenía en la original, y sustituye a la original en la
+ * pila (o se queda debajo si `keepOriginal`). Sirve para sacar, por ejemplo, el
+ * texto de un lado y el dibujo del otro, cada uno con su técnica.
+ */
+export async function cropObject(
+  canvas: Canvas,
+  view: HoodieView,
+  obj: Styled,
+  bitmap: HTMLCanvasElement,
+  rect: CropRect,
+  name: string,
+  keepOriginal = false,
+): Promise<FabricImage | null> {
+  const x = Math.max(0, Math.round(rect.x));
+  const y = Math.max(0, Math.round(rect.y));
+  const w = Math.min(bitmap.width - x, Math.round(rect.w));
+  const h = Math.min(bitmap.height - y, Math.round(rect.h));
+  if (w < 4 || h < 4) return null;
+
+  const sub = document.createElement('canvas');
+  sub.width = w;
+  sub.height = h;
+  sub.getContext('2d')!.drawImage(bitmap, x, y, w, h, 0, 0, w, h);
+  if (!hasInk(sub)) return null;
+
+  const box = (await obj.clone(CUSTOM_PROPS)) as Styled;
+  box.set({ angle: 0, flipX: false, flipY: false });
+  const shown = box.getBoundingRect();
+  const sx = shown.width / bitmap.width;
+  const sy = shown.height / bitmap.height;
+
+  // El centro de la zona recortada, medido desde el centro de la pieza, girado con ella.
+  const dx = (x + w / 2 - bitmap.width / 2) * sx * (obj.flipX ? -1 : 1);
+  const dy = (y + h / 2 - bitmap.height / 2) * sy * (obj.flipY ? -1 : 1);
+  const rad = (obj.angle * Math.PI) / 180;
+  const center = obj.getCenterPoint();
+
+  const image = new FabricImage(sub, {
+    originX: 'center',
+    originY: 'center',
+    left: center.x + dx * Math.cos(rad) - dy * Math.sin(rad),
+    top: center.y + dx * Math.sin(rad) + dy * Math.cos(rad),
+    scaleX: sx,
+    scaleY: sy,
+    angle: obj.angle,
+    flipX: obj.flipX,
+    flipY: obj.flipY,
+  });
+  Object.assign(image, {
+    hoodieRole: 'design' as const,
+    assetId: obj.get('assetId' as never),
+    assetName: name,
+    inkColor: obj.inkColor,
+    originalInk: obj.originalInk,
+    tecnica: obj.tecnica,
+    gradient: obj.gradient,
+    tonoShift: obj.tonoShift,
+    hiloAcabado: obj.hiloAcabado,
+    elementKind: 'png' as const,
+  });
+
+  const index = Math.max(canvas.getObjects().indexOf(obj), 0);
+  canvas.discardActiveObject();
+  if (keepOriginal) {
+    canvas.insertAt(index + 1, image);
+  } else {
+    canvas.remove(obj);
+    canvas.insertAt(index, image);
+  }
+  canvas.setActiveObject(image);
+  image.setCoords();
+  canvas.requestRenderAll();
+  syncCanvasState(canvas, view);
+  return image;
+}

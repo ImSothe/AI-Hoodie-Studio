@@ -481,6 +481,13 @@ export function getDesignBounds(canvas: Canvas): Rect | null {
 }
 
 /** Vuelca al store las métricas de la selección y avisa a la vista 3D. */
+let changeListener: ((canvas: Canvas, view: HoodieView) => void) | null = null;
+
+/** El historial (deshacer) se engancha aquí para enterarse de cada cambio del diseño. */
+export function setChangeListener(fn: (canvas: Canvas, view: HoodieView) => void) {
+  changeListener = fn;
+}
+
 export function syncCanvasState(canvas: Canvas, view: HoodieView) {
   const store = useStudio.getState();
   const active = canvas.getActiveObject();
@@ -500,6 +507,7 @@ export function syncCanvasState(canvas: Canvas, view: HoodieView) {
     store.setElements(summarizeElements(canvas, view));
   }
   notifyDesignChanged(view);
+  changeListener?.(canvas, view);
 }
 
 /** Nombre legible de un elemento para listas y Tech Pack. */

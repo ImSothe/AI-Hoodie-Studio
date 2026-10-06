@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { FabricObject } from 'fabric';
 import { importFiles } from '@/lib/assets/importFiles';
-import { addAssetToCanvas, clientToScene, nudgeActive, removeActive } from '@/lib/fabric/editor';
+import { addAssetToCanvas, clientToScene, nudgeActive, removeActive, syncCanvasState } from '@/lib/fabric/editor';
+import { redo, undo } from '@/lib/fabric/history';
 import { getCanvas } from '@/lib/fabric/registry';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, HOODIE_VIEWS, VIEW_SPECS, type HoodieView } from '@/lib/hoodie/spec';
 import { useStudio } from '@/lib/store';
@@ -41,6 +42,22 @@ export function TextileCanvas() {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      // Ctrl/Cmd+Z deshace el último cambio; Ctrl+Y o Ctrl+Mayús+Z lo rehace.
+      const state = useStudio.getState();
+      const editing = (getCanvas(activeView)?.getActiveObject() as { isEditing?: boolean } | undefined)?.isEditing;
+      if ((e.ctrlKey || e.metaKey) && !state.partsEditorOpen && !state.cropEditorOpen && !editing) {
+        const key = e.key.toLowerCase();
+        if (key === 'z' && !e.shiftKey) {
+          e.preventDefault();
+          undo(activeView);
+          return;
+        }
+        if (key === 'y' || (key === 'z' && e.shiftKey)) {
+          e.preventDefault();
+          redo(activeView);
+          return;
+        }
+      }
       const canvas = getCanvas(activeView);
       const active = canvas?.getActiveObject() as (FabricObject & { isEditing?: boolean }) | undefined;
       // Mientras se edita un texto en el lienzo, las teclas son para escribir.
@@ -52,7 +69,12 @@ export function TextileCanvas() {
         ArrowUp: [0, -step],
         ArrowDown: [0, step],
       };
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (e.key === 'Escape') {
+        // Esc suelta la selección (y deja ver la lista de piezas).
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        syncCanvasState(canvas, activeView);
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         removeActive(canvas, activeView);
       } else if (moves[e.key]) {

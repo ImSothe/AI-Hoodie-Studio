@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import { Segmented } from '../ui/Button';
 import { Section, SpecRow } from '../ui/Section';
 import { ElementInkPanel } from './ColorPanel';
-import { LooksPanel, PartsSection } from './EffectsPanels';
+import { ActionsBar, LooksPanel, PartsSection } from './EffectsPanels';
 import { SelectionPanel } from './SelectionPanel';
 import { FontSelect } from './TextPanel';
 
@@ -191,7 +191,14 @@ function ElementList() {
 /** Inspector de pieza con formato de ficha técnica de autor. */
 export function ElementPanel() {
   const style = useStudio((s) => s.selectionStyle);
-  if (!style) return <ElementList />;
+  if (!style) {
+    return (
+      <>
+        <ActionsBar />
+        <ElementList />
+      </>
+    );
+  }
   const technique = style.technique;
 
   return (
@@ -216,8 +223,8 @@ export function ElementPanel() {
           </div>
         )}
       </div>
-      <LooksPanel />
-      <Section title="Cómo se aplica">
+      <ActionsBar />
+      <Section title="Acabado">
         <TechniquePicker value={technique} />
       </Section>
       <TonalOptions />
@@ -225,8 +232,9 @@ export function ElementPanel() {
         <TextFields text={style.text} fontFamily={style.fontFamily} />
       )}
       <ElementInkPanel />
-      <PartsSection />
       <SelectionPanel />
+      <PartsSection />
+      <LooksPanel />
     </>
   );
 }

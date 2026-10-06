@@ -247,6 +247,7 @@ export function SelectionFrame({ getThree }: { getThree: MutableRefObject<(() =>
             ['Centrar', act((c) => centerActive(c, activeView, 'x'))],
             ['Espejo', act((c) => flipActive(c, activeView))],
             ['Duplicar', act((c) => void duplicateActive(c, activeView))],
+            ['Recortar', () => useStudio.getState().setCropEditorOpen(true)],
             ['Partes', () => useStudio.getState().setPartsEditorOpen(true)],
             ['Quitar', act((c) => removeActive(c, activeView))],
           ] as const

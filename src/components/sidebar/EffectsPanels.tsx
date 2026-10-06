@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import { HexColorInput } from 'react-colorful';
 import { normalizeHex } from '@/lib/color';
+import { duplicateActive } from '@/lib/fabric/editor';
 import { applyLookActive, scheduleGradientActive } from '@/lib/fabric/effects';
+import { redo, undo } from '@/lib/fabric/history';
+import { getCanvas } from '@/lib/fabric/registry';
 import { LOOKS } from '@/lib/hoodie/looks';
 import type { GradientSpec } from '@/lib/hoodie/spec';
 import { useStudio } from '@/lib/store';
@@ -16,15 +19,69 @@ const STOPS = ['#FFFFFF', '#EDE8DF', '#BFC1C2', '#8E8A83', '#C8A24A', '#FF5F6D',
 
 export const gradientCss = (g: GradientSpec) => `linear-gradient(${g.angle + 90}deg, ${g.from}, ${g.to})`;
 
+/** Deshacer y rehacer, duplicar y dividir la pieza: lo que se necesita siempre a mano. */
+export function ActionsBar() {
+  const view = useStudio((s) => s.activeView);
+  const flags = useStudio((s) => s.history[view]);
+  const style = useStudio((s) => s.selectionStyle);
+  const single = style?.count === 1;
+  const cell = 'bg-black px-2 py-3 text-[10px] tracking-[0.16em] text-fg uppercase transition hover:bg-white/5 disabled:opacity-25 disabled:hover:bg-black';
+  return (
+    <section className="border-b border-line px-6 py-4">
+      <div className="grid grid-cols-2 gap-px bg-line">
+        <button type="button" className={cell} disabled={!flags.undo} onClick={() => undo(view)} title="Revierte el último cambio (Ctrl+Z)">
+          ↶ Deshacer
+        </button>
+        <button type="button" className={cell} disabled={!flags.redo} onClick={() => redo(view)} title="Vuelve a aplicar lo deshecho (Ctrl+Y)">
+          Rehacer ↷
+        </button>
+      </div>
+      {style && (
+        <div className="mt-px grid grid-cols-3 gap-px bg-line">
+          <button
+            type="button"
+            className={cell}
+            title="Copia la pieza para recortarla o darle otro acabado"
+            onClick={() => {
+              const canvas = getCanvas(view);
+              if (canvas) void duplicateActive(canvas, view);
+            }}
+          >
+            Duplicar
+          </button>
+          <button
+            type="button"
+            className={cell}
+            disabled={!single}
+            title="Deja sólo un rectángulo de la pieza"
+            onClick={() => useStudio.getState().setCropEditorOpen(true)}
+          >
+            Recortar
+          </button>
+          <button
+            type="button"
+            className={cell}
+            disabled={!single}
+            title="Separa zonas con pincel para darles otro color o acabado"
+            onClick={() => useStudio.getState().setPartsEditorOpen(true)}
+          >
+            Partes
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** Estilos de un clic: técnica + color o degradado en un solo toque. */
 export function LooksPanel() {
   const style = useStudio((s) => s.selectionStyle);
   const garment = useStudio((s) => s.garmentColor);
   if (!style) return null;
   return (
-    <Section title="Estilos rápidos">
+    <Section title="Atajos de estilo (opcional)">
       <p className="mb-4 font-editorial text-[13.5px] leading-snug font-light text-muted italic">
-        Un toque y la pieza queda como una prenda de marca. Después puede ajustar cada cosa.
+        Si no quiere ajustar a mano, un toque deja la pieza con un acabado de marca. Después puede cambiar cualquier cosa más arriba.
       </p>
       <div className="grid grid-cols-3 gap-px bg-line">
         {LOOKS.map((look) => (
@@ -119,18 +176,23 @@ export function GradientEditor({ initial }: { initial: GradientSpec }) {
   );
 }
 
-/** Separar una zona de la pieza (las alas de un dragón, un adorno…) para tratarla aparte. */
+/** Dividir una pieza: recortar un rectángulo o separar zonas con pincel. */
 export function PartsSection() {
   const style = useStudio((s) => s.selectionStyle);
   if (!style || style.count !== 1) return null;
   return (
-    <Section title="Partes">
+    <Section title="Dividir la pieza">
       <p className="font-editorial text-[13.5px] leading-snug font-light text-muted italic">
-        ¿Quiere las alas reflectantes y el cuerpo bordado? Separe esa zona: tendrá su propio color, degradado y acabado.
+        ¿Texto arriba y dibujo abajo? Duplique la pieza y recorte cada copia. ¿Las alas de un dragón con otro acabado? Sepárelas con el pincel.
       </p>
-      <Button className="mt-4 w-full" onClick={() => useStudio.getState().setPartsEditorOpen(true)}>
-        Separar una parte…
-      </Button>
+      <div className="mt-4 grid grid-cols-2 gap-px bg-line">
+        <Button className="border-0 bg-black" onClick={() => useStudio.getState().setCropEditorOpen(true)}>
+          Recortar
+        </Button>
+        <Button className="border-0 bg-black" onClick={() => useStudio.getState().setPartsEditorOpen(true)}>
+          Partes
+        </Button>
+      </div>
     </Section>
   );
 }
