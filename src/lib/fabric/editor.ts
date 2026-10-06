@@ -297,9 +297,19 @@ function enableSnapping(
   };
 
   const offMoving = canvas.on('object:moving', onMoving);
+  const clamp = ({ target }: { target: FabricObject }) => {
+    clampToZone(target, view);
+    target.setCoords();
+  };
+  const offClampMove = canvas.on('object:moving', clamp);
+  const offClampScale = canvas.on('object:scaling', clamp);
+  const offClampDone = canvas.on('object:modified', clamp);
   const offUp = canvas.on('mouse:up', hide);
   return () => {
     offMoving();
+    offClampMove();
+    offClampScale();
+    offClampDone();
     offUp();
   };
 }
@@ -584,7 +594,39 @@ export type SelectionStyle = NonNullable<ReturnType<typeof selectionStyle>>;
 /* Acciones sobre la selección                                                */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Mantiene una pieza dentro de la zona de diseño (el torso): si es mayor se reduce
+ * y, si se sale, se empuja hacia dentro. Lo que cae fuera de la zona no se estampa,
+ * así el gráfico nunca queda cortado en seco ni pasa a hombros o mangas.
+ */
+export function clampToZone(obj: FabricObject, view: HoodieView) {
+  if (!isDesign(obj)) return;
+  const zone = getDesignZoneRect(view);
+  const box = () => {
+    const xs = obj.getCoords().map((p) => p.x);
+    const ys = obj.getCoords().map((p) => p.y);
+    return { l: Math.min(...xs), r: Math.max(...xs), t: Math.min(...ys), b: Math.max(...ys) };
+  };
+  let b = box();
+  const factor = Math.min(1, zone.width / (b.r - b.l), zone.height / (b.b - b.t));
+  if (factor < 1) {
+    const center = obj.getCenterPoint();
+    obj.set({ scaleX: obj.scaleX * factor, scaleY: obj.scaleY * factor });
+    obj.setPositionByOrigin(center, 'center', 'center');
+    obj.setCoords();
+    b = box();
+  }
+  let dx = 0;
+  let dy = 0;
+  if (b.l < zone.left) dx = zone.left - b.l;
+  else if (b.r > zone.left + zone.width) dx = zone.left + zone.width - b.r;
+  if (b.t < zone.top) dy = zone.top - b.t;
+  else if (b.b > zone.top + zone.height) dy = zone.top + zone.height - b.b;
+  if (dx || dy) obj.set({ left: obj.left + dx, top: obj.top + dy });
+}
+
 function commit(canvas: Canvas, view: HoodieView, obj?: FabricObject) {
+  if (obj) clampToZone(obj, view);
   obj?.setCoords();
   canvas.requestRenderAll();
   syncCanvasState(canvas, view);
