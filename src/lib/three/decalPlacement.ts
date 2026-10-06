@@ -105,6 +105,9 @@ export function surfaceHit(root: Object3D, x: number, y: number, side: HoodieVie
   return { point: hit.point.clone(), normal };
 }
 
+/** Un panel que empieza por encima de HPS - este margen (m) no es cuerpo ni manga: es la capucha. */
+export const isHoodMesh = (m: Mesh, hpsY: number) => new Box3().setFromObject(m).min.y >= hpsY - HOOD_MIN_BELOW_HPS_M;
+
 /** Paneles del tejido: las mallas grandes (se descartan cordones, puntadas, botones...). */
 export function garmentMeshes(root: Object3D) {
   const modelBox = new Box3().setFromObject(root);
@@ -128,7 +131,7 @@ export function computeProjector(root: Object3D, view: HoodieView, { hpsY, scale
   root.updateMatrixWorld(true);
   const all = garmentMeshes(root);
   // La capucha cae por encima del cuerpo: el estampado va sobre el cuerpo y las mangas, nunca sobre ella.
-  const isBody = (m: Mesh) => new Box3().setFromObject(m).min.y < hpsY - HOOD_MIN_BELOW_HPS_M;
+  const isBody = (m: Mesh) => !isHoodMesh(m, hpsY);
   const meshes = all.filter(isBody);
   const hoodMeshes = all.filter((m) => !isBody(m));
   const hood = hoodMeshes.length ? new Box3() : null;

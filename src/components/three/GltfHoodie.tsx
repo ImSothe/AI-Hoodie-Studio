@@ -7,11 +7,11 @@ import { TEXTURE_LAYERS } from '@/lib/fabric/registry';
 import { HOODIE_VIEWS } from '@/lib/hoodie/spec';
 import { useStudio } from '@/lib/store';
 import { useCalibration } from '@/lib/three/calibration';
-import { buildDecalPatches, computeProjector, garmentMeshes } from '@/lib/three/decalPlacement';
+import { buildDecalPatches, computeProjector, garmentMeshes, isHoodMesh } from '@/lib/three/decalPlacement';
 import { fabricAlbedo } from '@/lib/three/fabricShading';
 import { setGarmentRoot } from '@/lib/three/garmentRegistry';
 import { knitNormalMap } from '@/lib/three/fabricTexture';
-import { FABRIC_MATERIAL, GLB_RECOLOR, GLB_TARGET_HEIGHT, HEM_Y, MODEL_HPS_Y } from '@/lib/three/modelConfig';
+import { FABRIC_MATERIAL, GLB_RECOLOR, GLB_TARGET_HEIGHT, HEM_Y, MODEL_HPS_Y, BODY_Z_UNDER_HOOD } from '@/lib/three/modelConfig';
 import { Hardware } from './Hardware';
 import { PrintDecal } from './PrintDecal';
 import type { DesignTextures } from './useDesignTextures';
@@ -30,6 +30,7 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
   const debug = useCalibration((s) => s.debug);
   const layerCounts = useStudio((s) => s.layerCounts);
   const showDetails = useStudio((s) => s.showDetails);
+  const hoodUp = useStudio((s) => s.hoodUp);
 
   const { root, materials } = useMemo(() => {
     const root = scene.clone(true);
@@ -103,6 +104,48 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
       if ((obj as Mesh).isMesh && !panels.has(obj)) obj.visible = showDetails;
     });
   }, [root, showDetails]);
+
+  // Capucha levantada: se ocultan sus paneles y, en el resto de paneles, la zona que ocupa
+  // la capucha (el GLB la trae mezclada con el cuerpo), para ver la prenda debajo.
+  const hood = useMemo(() => {
+    const box = new Box3();
+    const hoods = garmentMeshes(root).filter((m) => isHoodMesh(m, MODEL_HPS_Y));
+    hoods.forEach((m) => box.expandByObject(m));
+    return { hoods, box: hoods.length ? box : null, cut: { value: 0 } };
+  }, [root]);
+  useEffect(() => {
+    hood.hoods.forEach((m) => (m.visible = !hoodUp));
+    hood.cut.value = hoodUp ? 1 : 0;
+  }, [hood, hoodUp]);
+  useEffect(() => {
+    const { box, cut } = hood;
+    if (!box) return;
+    const region = `vec4(${box.min.x.toFixed(4)}, ${box.max.x.toFixed(4)}, ${box.min.y.toFixed(4)}, 0.0)`;
+;
+    const [zLo, zHi] = BODY_Z_UNDER_HOOD;
+    materials.forEach((mat) => {
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.uHoodCut = cut;
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', `#include <common>
+varying vec3 vHoodPos;`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+vHoodPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', `#include <common>
+varying vec3 vHoodPos;
+uniform float uHoodCut;`)
+          .replace(
+            'void main() {',
+            `void main() {
+  vec4 hoodRegion = ${region};
+  if (uHoodCut > 0.5 && vHoodPos.x > hoodRegion.x && vHoodPos.x < hoodRegion.y && vHoodPos.y > hoodRegion.z && (vHoodPos.z < ${zLo.toFixed(4)} || vHoodPos.z > ${zHi.toFixed(4)})) discard;`,
+          );
+      };
+      mat.customProgramCacheKey = () => 'hood-cut';
+      mat.needsUpdate = true;
+    });
+  }, [hood, materials]);
 
   // Un proyector por cara y un parche de decal por panel del tejido.
   const projections = useMemo(

@@ -6,7 +6,7 @@ import type { Look } from '../hoodie/looks';
 import { useStudio } from '../store';
 import { CUSTOM_PROPS, syncCanvasState } from './editor';
 import { getCanvas } from './registry';
-import { activeDesignObjects, gradientBase, isTonal, restoreObject, setTechnique, tintObject, type Styled } from './tint';
+import { activeDesignObjects, gradientBase, restoreDetail, isTonal, restoreObject, setTechnique, tintObject, type Styled } from './tint';
 
 /**
  * Efectos de color de una pieza: degradados y «estilos» de un clic.
@@ -79,7 +79,7 @@ function paintGradient(base: CanvasImageSource & { width?: number; height?: numb
   ctx.globalCompositeOperation = 'source-in';
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, w, h);
-  return canvas;
+  return restoreDetail(canvas, base);
 }
 
 export async function applyGradient(canvas: Canvas, obj: Styled, spec: GradientSpec): Promise<Styled> {

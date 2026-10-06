@@ -73,6 +73,7 @@ export function HoodieViewer() {
   const stageMood = useStudio((s) => s.stageMood);
   const autoRotate = useStudio((s) => s.autoRotate);
   const showDetails = useStudio((s) => s.showDetails);
+  const hoodUp = useStudio((s) => s.hoodUp);
   const canUndo = useStudio((s) => s.history[s.activeView].undo);
   const { requestCamera, focusView, setSnapshot3d } = useStudio.getState();
   const getThree = useRef<(() => RootState) | null>(null);
@@ -265,6 +266,15 @@ export function HoodieViewer() {
               className="border border-fg/20 px-3 py-2 text-[10px] tracking-[0.22em] text-fg uppercase transition hover:border-fg/60"
             >
               {showDetails ? 'Con detalles' : 'Modelo limpio'}
+            </button>
+            <button
+              type="button"
+              onClick={() => useStudio.getState().setHoodUp(!hoodUp)}
+              aria-pressed={hoodUp}
+              title="Levanta la capucha para ver el cuerpo de la prenda debajo"
+              className="border border-fg/20 px-3 py-2 text-[10px] tracking-[0.22em] text-fg uppercase transition hover:border-fg/60"
+            >
+              {hoodUp ? 'Bajar capucha' : 'Levantar capucha'}
             </button>
             <CalibrationPanel />
             <button
