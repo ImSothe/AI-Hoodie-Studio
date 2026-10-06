@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import type { PatternAnalysis } from '@/lib/pattern/analysis';
-import type { PatternMode } from '@/lib/pattern/guide';
+import type { PatternMode } from '@/lib/pattern/layout';
 import { cn } from '@/lib/utils';
 import { PatternEditor } from './PatternEditor';
 import { PatternViewer, type PatternPose } from './PatternViewer';

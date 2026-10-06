@@ -3,8 +3,7 @@
 import type { Canvas } from 'fabric';
 import { CanvasTexture, ClampToEdgeWrapping, LinearMipmapLinearFilter, SRGBColorSpace } from 'three';
 import { rafThrottle } from '../utils';
-import type { PatternMode } from './guide';
-import { PATTERN_H, PATTERN_W } from './layout';
+import { sizeOf, type PatternMode } from './layout';
 
 /**
  * Puente entre el lienzo plano del patrón (Fabric) y el 3D: el contenido del
@@ -23,8 +22,8 @@ export function getPrintCanvas(m: PatternMode = mode) {
   let canvas = canvases[m];
   if (!canvas) {
     canvas = document.createElement('canvas');
-    canvas.width = PATTERN_W;
-    canvas.height = PATTERN_H;
+    canvas.width = sizeOf(m).w;
+    canvas.height = sizeOf(m).h;
     canvases[m] = canvas;
   }
   return canvas;
@@ -38,8 +37,7 @@ export function getPrintTexture(m: PatternMode = mode) {
     texture.wrapS = texture.wrapT = ClampToEdgeWrapping;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.anisotropy = 8;
-    // Los dos modos leen un juego de UV propio, ya normalizado al lienzo (ver attachPatternUv).
-    texture.channel = m === 'joined' ? 1 : 2;
+    // Cada modo lee sus propias UV (ver attachPatternUv): la textura sólo se muestrea en el shader de la prenda.
     textures[m] = texture;
   }
   return texture;
@@ -58,8 +56,9 @@ export function bindPrintSource(canvas: Canvas | null) {
 function paint(m: PatternMode) {
   if (!source || source.destroyed) return;
   const ctx = getPrintCanvas(m).getContext('2d')!;
-  ctx.clearRect(0, 0, PATTERN_W, PATTERN_H);
-  ctx.drawImage(source.toCanvasElement(1), 0, 0, PATTERN_W, PATTERN_H);
+  const { w, h } = sizeOf(m);
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(source.toCanvasElement(1), 0, 0, w, h);
   getPrintTexture(m).needsUpdate = true;
 }
 

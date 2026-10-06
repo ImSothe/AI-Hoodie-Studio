@@ -5,9 +5,10 @@ import { Canvas, FabricImage, loadSVGFromString, util, type FabricObject } from 
 import { importFiles } from '@/lib/assets/importFiles';
 import { TEMPLATES, templateAsset } from '@/lib/assets/templates';
 import { restoreObject, tintObject, type Styled } from '@/lib/fabric/tint';
-import { PATTERN_H, PATTERN_W } from '@/lib/pattern/layout';
+import { sizeOf } from '@/lib/pattern/layout';
 import type { PatternAnalysis } from '@/lib/pattern/analysis';
-import { drawPatternGuide, type PatternMode } from '@/lib/pattern/guide';
+import { drawPatternGuide } from '@/lib/pattern/guide';
+import type { PatternMode } from '@/lib/pattern/layout';
 import { bindPrintSource, exportPatternPng, schedulePrint, setPrintMode } from '@/lib/pattern/print';
 import type { GeneratedAsset } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -38,7 +39,12 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
   const hostRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<Canvas | null>(null);
-  const [scale, setScale] = useState(0.4);
+  // Espacio disponible en pantalla; la escala sale de él y del tamaño del lienzo del modo actual.
+  const [room, setRoom] = useState({ w: 800, h: 700 });
+  const size = sizeOf(mode);
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
+  const scale = Math.max(0.1, Math.min(room.w / size.w, room.h / size.h));
   const [hasSelection, setHasSelection] = useState(false);
   const [labels, setLabels] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -50,8 +56,8 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     const el = document.createElement('canvas');
     host.appendChild(el);
     const canvas = new Canvas(el, {
-      width: PATTERN_W,
-      height: PATTERN_H,
+      width: sizeRef.current.w,
+      height: sizeRef.current.h,
       preserveObjectStacking: true,
       enableRetinaScaling: false,
       skipOffscreen: false,
@@ -111,7 +117,7 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     if (!box) return;
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      setScale(Math.max(0.1, Math.min(width / PATTERN_W, height / PATTERN_H)));
+      setRoom({ w: width, h: height });
     });
     ro.observe(box);
     return () => ro.disconnect();
@@ -119,19 +125,19 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.setDimensions({ width: `${PATTERN_W * scale}px`, height: `${PATTERN_H * scale}px` }, { cssOnly: true });
-  }, [scale]);
+    canvas.setDimensions({ width: `${size.w * scale}px`, height: `${size.h * scale}px` }, { cssOnly: true });
+  }, [scale, size.w, size.h]);
 
   // Guía: las piezas planas con su nombre.
   useEffect(() => {
     const guide = guideRef.current;
     if (!guide) return;
     const ctx = guide.getContext('2d')!;
-    ctx.clearRect(0, 0, PATTERN_W, PATTERN_H);
+    ctx.clearRect(0, 0, size.w, size.h);
     ctx.fillStyle = '#1b1b1b';
-    ctx.fillRect(0, 0, PATTERN_W, PATTERN_H);
+    ctx.fillRect(0, 0, size.w, size.h);
     if (analysis) drawPatternGuide(ctx, analysis, mode, labels);
-  }, [analysis, mode, labels]);
+  }, [analysis, mode, labels, size.w, size.h]);
 
   // Cada modo tiene su propio diseño: al cambiar se guarda el actual y se carga el del otro.
   const modeRef = useRef(mode);
@@ -143,6 +149,8 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     modeRef.current = mode;
     canvas.discardActiveObject();
     canvas.clear();
+    // Cada modo tiene su propio lienzo, con su propio tamaño.
+    canvas.setDimensions({ width: sizeOf(mode).w, height: sizeOf(mode).h }, { backstoreOnly: true });
     void canvas.loadFromJSON(saved.current[mode] ?? { objects: [] }).then(() => {
       canvas.requestRenderAll();
       setPrintMode(mode);
@@ -154,8 +162,9 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
     if (!canvas) return;
     for (const asset of assets) {
       const obj = await createObject(asset);
-      const k = (PATTERN_W * 0.3) / Math.max(obj.width || 1, obj.height || 1);
-      obj.set({ originX: 'center', originY: 'center', left: PATTERN_W / 2, top: PATTERN_H / 2, scaleX: k, scaleY: k });
+      const { w, h } = sizeRef.current;
+      const k = (Math.min(w, h) * 0.3) / Math.max(obj.width || 1, obj.height || 1);
+      obj.set({ originX: 'center', originY: 'center', left: w / 2, top: h / 2, scaleX: k, scaleY: k });
       Object.assign(obj, { hoodieRole: 'design', assetName: asset.name });
       canvas.add(obj);
       canvas.setActiveObject(obj);
@@ -291,13 +300,13 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
       </div>
 
       <div ref={boxRef} className="relative min-h-0 flex-1 overflow-hidden bg-[#0d0d0d] p-3">
-        <div className="relative mx-auto" style={{ width: PATTERN_W * scale, height: PATTERN_H * scale }}>
+        <div className="relative mx-auto" style={{ width: size.w * scale, height: size.h * scale }}>
           <canvas
             ref={guideRef}
-            width={PATTERN_W}
-            height={PATTERN_H}
+            width={size.w}
+            height={size.h}
             className="absolute inset-0"
-            style={{ width: PATTERN_W * scale, height: PATTERN_H * scale }}
+            style={{ width: size.w * scale, height: size.h * scale }}
           />
           <div ref={hostRef} className="absolute inset-0" />
           {!analysis && (

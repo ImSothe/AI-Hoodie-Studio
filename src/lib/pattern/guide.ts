@@ -1,8 +1,8 @@
-import { uvToPx } from './layout';
+import { uvToPx, type PatternMode } from './layout';
 import { PIECE_LABELS } from './panels';
 import type { Affine, Island, PatternAnalysis } from './analysis';
 
-export type PatternMode = 'pieces' | 'joined';
+export type { PatternMode };
 
 /** Camino 2D de una pieza con todos los triángulos con el mismo sentido (así los solapes no se anulan). */
 function pathOf(island: Island, m?: Affine) {
@@ -24,17 +24,20 @@ function pathOf(island: Island, m?: Affine) {
   return path;
 }
 
-/** Dibuja las piezas planas (relleno gris) y sus nombres. `joined` = piezas ya cosidas entre sí en una sola superficie. */
+/** Dibuja las piezas planas (relleno gris) y sus nombres. «joined»: los dos tendidos unidos por sus costuras. */
 export function drawPatternGuide(ctx: CanvasRenderingContext2D, analysis: PatternAnalysis, mode: PatternMode, labels = true) {
   ctx.fillStyle = '#cfcfcf';
   ctx.strokeStyle = '#cfcfcf';
   ctx.lineWidth = 1.5;
-  for (const island of analysis.islands) {
-    const transform = (mode === 'joined' ? analysis.joined : analysis.pieces).get(island);
-    if (!transform) continue;
-    const path = pathOf(island, transform);
-    ctx.fill(path, 'nonzero');
-    ctx.stroke(path);
+  const layouts = mode === 'joined' ? [analysis.joinedFront, analysis.joinedBack] : [analysis.pieces];
+  for (const layout of layouts) {
+    for (const island of analysis.islands) {
+      const transform = layout.get(island);
+      if (!transform) continue;
+      const path = pathOf(island, transform);
+      ctx.fill(path, 'nonzero');
+      ctx.stroke(path);
+    }
   }
   if (!labels) return;
   ctx.font = '600 26px Inter, sans-serif';

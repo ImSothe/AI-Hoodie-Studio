@@ -1,5 +1,5 @@
 import { BufferAttribute, Matrix3, Raycaster, Vector3, type Mesh, type Object3D } from 'three';
-import { PATTERN_H, PATTERN_W, uvToPx } from './layout';
+import { JOINED_H, JOINED_W, PATTERN_H, PATTERN_W, uvToPx } from './layout';
 import { fabricPanels, islandsOf, PIECE_LABELS } from './panels';
 
 /**
@@ -52,8 +52,10 @@ export interface PatternAnalysis {
   islands: Island[];
   /** Por malla: 1 = tela exterior, 0 = forro. */
   masks: Map<Mesh, Float32Array>;
-  /** Transformación de cada pieza exterior al lienzo del patrón UNIDO. */
-  joined: Map<Island, Affine>;
+  /** Tendido unido centrado en el delantero (delantero + mangas + capucha): pieza → lienzo unido. */
+  joinedFront: Map<Island, Affine>;
+  /** Tendido unido centrado en la espalda (espalda + mangas + capucha + piezas menores): pieza → lienzo unido. */
+  joinedBack: Map<Island, Affine>;
   /** Piezas sueltas: cada una en su sitio del plano, ya sin el espejo. */
   pieces: Map<Island, Affine>;
   joinedLabels: { label: string; x: number; y: number }[];
@@ -229,7 +231,29 @@ function findSeams(outer: Island[]): Seam[] {
       }
     }
   }
-  return [...seams.values()];
+  // Dos piezas pueden coserse por varios sitios (los dos costados del cuerpo): cada tramo continuo
+  // es una costura distinta; si no, se mezclarían y una pieza acabaría encima de la otra.
+  const result: Seam[] = [];
+  for (const seam of seams.values()) {
+    const n = seam.pairs.length;
+    const parent = Array.from({ length: n }, (_, i) => i);
+    const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+    const at = (i: number) => [seam.a.px[seam.pairs[i][0] * 2], seam.a.px[seam.pairs[i][0] * 2 + 1]];
+    const pts = Array.from({ length: n }, (_, i) => at(i));
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        if (Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]) < 45) parent[find(i)] = find(j);
+      }
+    }
+    const groups = new Map<number, [number, number][]>();
+    seam.pairs.forEach((pair, i) => {
+      const g = groups.get(find(i)) ?? [];
+      g.push(pair);
+      groups.set(find(i), g);
+    });
+    for (const pairs of groups.values()) result.push({ a: seam.a, b: seam.b, pairs });
+  }
+  return result;
 }
 
 /** Rotación + desplazamiento que lleva los puntos `p` sobre los `q` (mínimos cuadrados). */
@@ -259,86 +283,108 @@ function rigid(p: [number, number][], q: [number, number][]): { m: Affine; error
   return { m, error: error / n };
 }
 
-/** Despliega las piezas exteriores unidas por sus costuras (árbol que parte de la espalda). */
-function unfold(outer: Island[], seams: Seam[], skip: Set<Island>): Map<Island, Affine> {
+/**
+ * Despliega unas piezas exteriores unidas por sus costuras en una sola superficie plana (árbol que parte
+ * de `root`). Sólo coloca las piezas de `allowed`; una pieza que no cabe sin solaparse se queda fuera.
+ */
+function unfold(root: Island, seams: Seam[], allowed: Set<Island>, tier: Map<Island, number>): Map<Island, Affine> {
   const placed = new Map<Island, Affine>();
-  if (!outer.length) return placed;
-  // Raíz: la pieza grande más atrás de la prenda (la espalda).
-  const centerZ = outer.reduce((s, i) => s + i.pts.reduce((a, p) => a + p.z, 0) / i.pts.length, 0) / outer.length;
-  const root = [...outer]
-    .filter((i) => i.pts.reduce((a, p) => a + p.z, 0) / i.pts.length < centerZ)
-    .sort((a, b) => b.verts.length - a.verts.length)[0] ?? outer[0];
   placed.set(root, root.mirrored ? mirrorOf(root) : IDENTITY);
+  const blocked = new Set<Island>();
 
-  const usable = seams.filter((s) => s.pairs.length >= 8);
-  for (;;) {
-    let best: { seam: Seam; from: Island; to: Island } | null = null;
-    for (const seam of usable) {
-      const aIn = placed.has(seam.a);
-      const bIn = placed.has(seam.b);
-      if (aIn === bIn) continue;
-      if (skip.has(aIn ? seam.b : seam.a)) continue; // el delantero se queda aparte: choca con las mangas
-      if (!best || seam.pairs.length > best.seam.pairs.length) {
-        best = { seam, from: aIn ? seam.a : seam.b, to: aIn ? seam.b : seam.a };
-      }
+  const usable = seams.filter((s) => s.pairs.length >= 8 && allowed.has(s.a) && allowed.has(s.b));
+
+  // Casillas del plano que ocupa cada pieza colocada: sirve para que una pieza no se pegue donde ya hay otra.
+  const CELL = 24;
+  const cellsOf = (island: Island, m: Affine) => {
+    const cells = new Set<number>();
+    for (let i = 0; i < island.verts.length; i++) {
+      const [x, y] = apply(m, island.px[i * 2], island.px[i * 2 + 1]);
+      cells.add((Math.floor(x / CELL) + 5000) * 10000 + Math.floor(y / CELL) + 5000);
     }
-    if (!best) break;
-    const { seam, from, to } = best;
+    return cells;
+  };
+  const occupied = new Map<Island, Set<number>>();
+  occupied.set(root, cellsOf(root, placed.get(root)!));
+
+  // Ajuste de una pieza a una costura con una pieza ya colocada.
+  const attach = (seam: Seam, from: Island, to: Island) => {
     const fromIsA = from === seam.a;
     const p: [number, number][] = [];
     const q: [number, number][] = [];
     for (const [sa, sb] of seam.pairs) {
-      const f = fromIsA ? sa : sb;
-      const t = fromIsA ? sb : sa;
-      p.push([to.px[t * 2], to.px[t * 2 + 1]]);
-      q.push(apply(placed.get(from)!, from.px[f * 2], from.px[f * 2 + 1]));
+      const fi = fromIsA ? sa : sb;
+      const ti = fromIsA ? sb : sa;
+      p.push([to.px[ti * 2], to.px[ti * 2 + 1]]);
+      q.push(apply(placed.get(from)!, from.px[fi * 2], from.px[fi * 2 + 1]));
     }
     // Dos piezas con distinto «espejo» se alinean con una simetría; con el mismo, con un giro.
+    // Sólo se prefiere la simetría si el giro no encaja de verdad (con costuras cortas ambos encajan por azar).
     const turn = rigid(p, q);
     const flip = rigid(p.map(([x, y]) => [-x, y] as [number, number]), q);
-    const useFlip = flip.error < turn.error * 0.5;
+    const useFlip = turn.error > 12 && flip.error < turn.error * 0.5;
     const m = useFlip ? compose(flip.m, FLIP_X) : turn.m;
     const error = useFlip ? flip.error : turn.error;
-    if (error > 60) {
-      // La costura no encaja bien (borde muy curvo o pieza apilada): se descarta y se prueba otra.
-      usable.splice(usable.indexOf(seam), 1);
+    const cells = cellsOf(to, m);
+    let overlap = 0;
+    for (const taken of occupied.values()) for (const c of cells) if (taken.has(c)) overlap++;
+    return { m, error, cells, overlap };
+  };
+
+  for (;;) {
+    // Piezas por colocar que tienen costura con alguna ya colocada.
+    const options = new Map<Island, { seam: Seam; from: Island }[]>();
+    for (const seam of usable) {
+      const aIn = placed.has(seam.a);
+      const bIn = placed.has(seam.b);
+      if (aIn === bIn) continue;
+      const to = aIn ? seam.b : seam.a;
+      if (blocked.has(to)) continue;
+      const list = options.get(to) ?? [];
+      list.push({ seam, from: aIn ? seam.a : seam.b });
+      options.set(to, list);
+    }
+    if (!options.size) break;
+    // Primero las piezas principales (mangas) y la capucha al final; dentro de cada grupo, la costura más larga.
+    let target: Island | null = null;
+    let rank = [99, 0];
+    for (const [island, list] of options) {
+      const t = tier.get(island) ?? 9;
+      const len = Math.max(...list.map((o) => o.seam.pairs.length));
+      if (t < rank[0] || (t === rank[0] && len > rank[1])) {
+        rank = [t, len];
+        target = island;
+      }
+    }
+    const candidates = options.get(target!)!;
+    // De sus costuras, la que no solape con lo ya colocado (y, a igualdad, la más larga).
+    let best: { opt: (typeof candidates)[number]; fit: ReturnType<typeof attach> } | null = null;
+    for (const opt of candidates) {
+      const result = attach(opt.seam, opt.from, target!);
+      // Una pieza que cae encima de otra no vale (el borde común sólo comparte unas casillas).
+      if (result.overlap > 80) continue;
+      if (result.error > 60) {
+        usable.splice(usable.indexOf(opt.seam), 1);
+        continue;
+      }
+      const better =
+        !best ||
+        result.overlap < best.fit.overlap - 40 ||
+        (Math.abs(result.overlap - best.fit.overlap) <= 40 && opt.seam.pairs.length > best.opt.seam.pairs.length);
+      if (better) best = { opt, fit: result };
+    }
+    if (!best) {
+      blocked.add(target!); // no cabe sin solaparse
       continue;
     }
-    placed.set(to, m);
-  }
-
-  // Las piezas sin costura con el resto se colocan en filas debajo.
-  const bounds = [1e9, 1e9, -1e9, -1e9];
-  for (const [island, m] of placed) {
-    for (let i = 0; i < island.verts.length; i++) {
-      const [x, y] = apply(m, island.px[i * 2], island.px[i * 2 + 1]);
-      bounds[0] = Math.min(bounds[0], x);
-      bounds[1] = Math.min(bounds[1], y);
-      bounds[2] = Math.max(bounds[2], x);
-      bounds[3] = Math.max(bounds[3], y);
-    }
-  }
-  const rest = outer.filter((i) => !placed.has(i)).sort((a, b) => b.verts.length - a.verts.length);
-  let cursorX = bounds[0];
-  let rowY = bounds[3] + 60;
-  let rowH = 0;
-  for (const island of rest) {
-    const w = island.bbox[2] - island.bbox[0];
-    const h = island.bbox[3] - island.bbox[1];
-    if (cursorX + w > bounds[0] + (bounds[2] - bounds[0]) * 1.1 && rowH > 0) {
-      cursorX = bounds[0];
-      rowY += rowH + 40;
-      rowH = 0;
-    }
-    placed.set(island, compose([1, 0, 0, 1, cursorX - island.bbox[0], rowY - island.bbox[1]], island.mirrored ? mirrorOf(island) : IDENTITY));
-    cursorX += w + 40;
-    rowH = Math.max(rowH, h);
+    placed.set(target!, best.fit.m);
+    occupied.set(target!, best.fit.cells);
   }
   return placed;
 }
 
-/** Encaja el patrón unido en el lienzo (escala uniforme y centrado, con margen). */
-function fit(placed: Map<Island, Affine>): Map<Island, Affine> {
+/** Encaja unas piezas ya colocadas en una región del lienzo (escala uniforme y centrado). */
+function fitInto(placed: Map<Island, Affine>, region: { x: number; y: number; w: number; h: number }) {
   const b = [1e9, 1e9, -1e9, -1e9];
   for (const [island, m] of placed) {
     for (let i = 0; i < island.verts.length; i++) {
@@ -349,15 +395,12 @@ function fit(placed: Map<Island, Affine>): Map<Island, Affine> {
       b[3] = Math.max(b[3], y);
     }
   }
-  const margin = 40;
-  const k = Math.min((PATTERN_W - margin * 2) / (b[2] - b[0]), (PATTERN_H - margin * 2) / (b[3] - b[1]));
-  const ox = (PATTERN_W - (b[2] - b[0]) * k) / 2 - b[0] * k;
-  const oy = (PATTERN_H - (b[3] - b[1]) * k) / 2 - b[1] * k;
-  const out = new Map<Island, Affine>();
-  for (const [island, m] of placed) {
-    out.set(island, [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k + ox, m[5] * k + oy]);
-  }
-  return out;
+  const k = Math.min(region.w / (b[2] - b[0]), region.h / (b[3] - b[1]));
+  const ox = region.x + (region.w - (b[2] - b[0]) * k) / 2 - b[0] * k;
+  const oy = region.y + (region.h - (b[3] - b[1]) * k) / 2 - b[1] * k;
+  const map = new Map<Island, Affine>();
+  for (const [island, m] of placed) map.set(island, compose([k, 0, 0, k, ox, oy], m));
+  return { map, k };
 }
 
 export function analyzePattern(root: Object3D): PatternAnalysis {
@@ -375,68 +418,114 @@ export function analyzePattern(root: Object3D): PatternAnalysis {
   // Las piezas sin superficie (rendijas de costura) no se dibujan ni se estampan.
   const flat = (i: Island) => i.bbox[2] - i.bbox[0] < 6 || i.bbox[3] - i.bbox[1] < 6 || i.area < 2500;
   const outer = islands.filter((i) => i.outer && !flat(i));
-  // Un patrón plano de toda la prenda se solapa (el delantero y las mangas cuelgan del mismo lado de la espalda).
-  // El patrón unido es el de espalda + mangas + capucha; el resto (delantero, cintura, puños) queda aparte, debajo.
+
+  // Cada etiqueta del plano de piezas sueltas se asigna a su pieza (y a sus copias apiladas).
   const labelOf = new Map<Island, string>();
   for (const piece of PIECE_LABELS) {
     const island = outer
       .filter((i) => i.verts.length > 800 && piece.x >= i.bbox[0] && piece.x <= i.bbox[2] && piece.y >= i.bbox[1] && piece.y <= i.bbox[3])
       .sort((a, b) => (a.bbox[2] - a.bbox[0]) * (a.bbox[3] - a.bbox[1]) - (b.bbox[2] - b.bbox[0]) * (b.bbox[3] - b.bbox[1]))[0];
     if (!island) continue;
-    // Las copias idénticas apiladas (si el forro no se pudo distinguir) van con la pieza.
     for (const copy of outer.filter((q) => q === island || twin(island, q))) if (!labelOf.has(copy)) labelOf.set(copy, piece.label);
   }
-  const JOINED_PIECES = new Set(['Espalda', 'Manga izquierda', 'Manga derecha', 'Capucha · lado', 'Capucha · centro']);
-  const apart = new Set(outer.filter((i) => !JOINED_PIECES.has(labelOf.get(i) ?? '')));
-  const joined = fit(unfold(outer, findSeams(outer), apart));
+  const named = (label: string) =>
+    [...labelOf].filter(([, l]) => l === label).map(([i]) => i).sort((a, b) => b.verts.length - a.verts.length);
+  const back = named('Espalda')[0];
+  const front = named('Delantero')[0];
+  const shared = outer.filter((i) => ['Manga izquierda', 'Manga derecha', 'Capucha · lado', 'Capucha · centro'].includes(labelOf.get(i) ?? ''));
+  const TIER: Record<string, number> = { 'Manga izquierda': 2, 'Manga derecha': 2, 'Capucha · lado': 3, 'Capucha · centro': 3 };
+  const tier = new Map<Island, number>();
+  for (const i of shared) tier.set(i, TIER[labelOf.get(i)!] ?? 9);
+
+  // Dos tendidos unidos: uno parte del delantero y otro de la espalda. Las mangas y la capucha salen en los dos
+  // (lo que se pinte en una pieza se ve en la prenda venga de donde venga). Una banda única no cabe sin solaparse.
+  const seams = findSeams(outer);
+  const frontLayout = front ? unfold(front, seams, new Set([front, ...shared]), tier) : new Map<Island, Affine>();
+  const backLayout = back ? unfold(back, seams, new Set([back, ...shared]), tier) : new Map<Island, Affine>();
+
+  const margin = 40;
+  const topH = JOINED_H * 0.8;
+  const half = JOINED_W / 2;
+  const fitFront = fitInto(frontLayout, { x: margin, y: margin, w: half - margin * 1.5, h: topH - margin });
+  const fitBack = fitInto(backLayout, { x: half + margin * 0.5, y: margin, w: half - margin * 1.5, h: topH - margin });
+  const joinedFront = fitFront.map;
+  const joinedBack = fitBack.map;
+
+  // Piezas menores (cintura, puños…): en fila bajo los tendidos, a la misma escala.
+  const placedAny = new Set([...frontLayout.keys(), ...backLayout.keys()]);
+  const apart = outer.filter((i) => !placedAny.has(i)).sort((a, b) => b.verts.length - a.verts.length);
+  const k = fitBack.k;
+  let cursorX = margin;
+  let rowY = topH + margin / 2;
+  let rowH = 0;
+  for (const island of apart) {
+    const w = (island.bbox[2] - island.bbox[0]) * k;
+    const h = (island.bbox[3] - island.bbox[1]) * k;
+    if (cursorX + w > JOINED_W - margin && rowH > 0) {
+      cursorX = margin;
+      rowY += rowH + 20;
+      rowH = 0;
+    }
+    joinedBack.set(
+      island,
+      compose([k, 0, 0, k, cursorX - island.bbox[0] * k, rowY - island.bbox[1] * k], island.mirrored ? mirrorOf(island) : IDENTITY),
+    );
+    cursorX += w + 20;
+    rowH = Math.max(rowH, h);
+  }
+
   // Los forros siguen a su pareja exterior.
   for (const island of islands) {
     if (island.outer && !flat(island)) continue;
     const partner = flat(island) ? undefined : outer.find((o) => twin(o, island));
-    if (partner) joined.set(island, joined.get(partner)!);
+    if (!partner) continue;
+    if (joinedFront.has(partner)) joinedFront.set(island, joinedFront.get(partner)!);
+    if (joinedBack.has(partner)) joinedBack.set(island, joinedBack.get(partner)!);
   }
 
-  // Nombres: cada etiqueta del plano por piezas se coloca sobre su pieza ya desplegada.
+  // Nombres de cada tendido.
   const joinedLabels: PatternAnalysis['joinedLabels'] = [];
   for (const piece of PIECE_LABELS) {
-    const candidates = outer
-      .filter((i) => piece.x >= i.bbox[0] && piece.x <= i.bbox[2] && piece.y >= i.bbox[1] && piece.y <= i.bbox[3])
-      .sort((a, b) => (a.bbox[2] - a.bbox[0]) * (a.bbox[3] - a.bbox[1]) - (b.bbox[2] - b.bbox[0]) * (b.bbox[3] - b.bbox[1]));
-    const island = candidates[0];
+    const island = outer
+      .filter((i) => i.verts.length > 800 && piece.x >= i.bbox[0] && piece.x <= i.bbox[2] && piece.y >= i.bbox[1] && piece.y <= i.bbox[3])
+      .sort((a, b) => (a.bbox[2] - a.bbox[0]) * (a.bbox[3] - a.bbox[1]) - (b.bbox[2] - b.bbox[0]) * (b.bbox[3] - b.bbox[1]))[0];
     if (!island) continue;
-    const [x, y] = apply(joined.get(island)!, piece.x, piece.y);
-    joinedLabels.push({ label: piece.label, x, y });
+    for (const layout of [joinedFront, joinedBack]) {
+      const m = layout.get(island);
+      if (!m) continue;
+      const [x, y] = apply(m, piece.x, piece.y);
+      joinedLabels.push({ label: piece.label, x, y });
+    }
   }
+
   const pieces = new Map<Island, Affine>();
   for (const island of islands) pieces.set(island, island.mirrored ? mirrorOf(island) : IDENTITY);
-  return { islands, masks, joined, pieces, joinedLabels };
+  return { islands, masks, joinedFront, joinedBack, pieces, joinedLabels };
 }
 
 /**
- * Añade a cada malla dos juegos de UV con la posición de cada vértice en el lienzo del patrón:
- * `uv1` para el patrón unido y `uv2` para las piezas sueltas.
+ * Añade a cada malla los juegos de UV con la posición de cada vértice en el lienzo del patrón:
+ *  - `uvFront` y `uvBack`: los dos tendidos unidos (lienzo de `JOINED_*`);
+ *  - `uvPieces`: las piezas sueltas (lienzo de `PATTERN_*`).
+ * Un vértice que no está en un tendido apunta a la esquina del lienzo (transparente).
  */
 export function attachPatternUv(analysis: PatternAnalysis) {
-  const write = (name: string, transforms: Map<Island, Affine>) => {
+  const write = (name: string, transforms: Map<Island, Affine>, w: number, h: number) => {
     const byMesh = new Map<Mesh, Float32Array>();
     for (const island of analysis.islands) {
-      const geo = island.mesh.geometry;
-      const count = geo.getAttribute('position').count;
+      const count = island.mesh.geometry.getAttribute('position').count;
       const uv = byMesh.get(island.mesh) ?? byMesh.set(island.mesh, new Float32Array(count * 2)).get(island.mesh)!;
       const m = transforms.get(island);
       island.verts.forEach((vi, i) => {
-        if (!m) {
-          uv[vi * 2] = 0; // sin sitio en este patrón: esquina del lienzo (transparente)
-          uv[vi * 2 + 1] = 0;
-          return;
-        }
+        if (!m) return; // se queda en (0, 0): esquina transparente
         const [x, y] = apply(m, island.px[i * 2], island.px[i * 2 + 1]);
-        uv[vi * 2] = x / PATTERN_W;
-        uv[vi * 2 + 1] = 1 - y / PATTERN_H;
+        uv[vi * 2] = x / w;
+        uv[vi * 2 + 1] = 1 - y / h;
       });
     }
     for (const [mesh, data] of byMesh) mesh.geometry.setAttribute(name, new BufferAttribute(data, 2));
   };
-  write('uv1', analysis.joined);
-  write('uv2', analysis.pieces);
+  write('uvFront', analysis.joinedFront, JOINED_W, JOINED_H);
+  write('uvBack', analysis.joinedBack, JOINED_W, JOINED_H);
+  write('uvPieces', analysis.pieces, PATTERN_W, PATTERN_H);
 }

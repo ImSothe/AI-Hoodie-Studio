@@ -6,7 +6,7 @@ import { OrbitControls, useGLTF } from '@react-three/drei';
 import { Box3, BufferAttribute, MeshPhysicalMaterial, NeutralToneMapping, Vector3, type Mesh } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { analyzePattern, attachPatternUv, type PatternAnalysis } from '@/lib/pattern/analysis';
-import type { PatternMode } from '@/lib/pattern/guide';
+import type { PatternMode } from '@/lib/pattern/layout';
 import { fabricPanels } from '@/lib/pattern/panels';
 import { getPrintTexture } from '@/lib/pattern/print';
 import { useCalibration } from '@/lib/three/calibration';
@@ -26,6 +26,8 @@ function PatternGarment({
 }) {
   const { scene } = useGLTF(MODEL_URL);
   const rotationY = useCalibration((s) => s.rotationY);
+  // Uniform compartido por todos los materiales: 0 = tendidos unidos, 1 = piezas sueltas.
+  const piecesMode = useMemo(() => ({ value: 0 }), []);
 
   const { root, materials, analysis } = useMemo(() => {
     const root = scene.clone(true);
@@ -63,18 +65,56 @@ function PatternGarment({
       mat.normalMap = knitNormalMap();
       mat.normalScale.set(0.24, 0.24);
       // El mapa no multiplica el color de la tela: la estampa se pinta encima, con su transparencia,
-      // y sólo en la capa exterior (el forro no recibe dibujo).
+      // y sólo en la capa exterior (el forro no recibe dibujo). En el modo unido se muestrean los dos
+      // tendidos (delantero y espalda) del mismo lienzo y se superponen: las mangas y la capucha salen
+      // en ambos, y lo que se pinte en cualquiera se ve en la prenda.
       mat.onBeforeCompile = (shader) => {
+        shader.uniforms.uPieces = piecesMode;
         shader.vertexShader = shader.vertexShader
-          .replace('#include <common>', ['#include <common>', 'attribute float printMask;', 'varying float vPrintMask;'].join('\n'))
-          .replace('#include <begin_vertex>', ['#include <begin_vertex>', 'vPrintMask = printMask;'].join('\n'));
+          .replace(
+            '#include <common>',
+            [
+              '#include <common>',
+              'attribute float printMask;',
+              'attribute vec2 uvFront;',
+              'attribute vec2 uvBack;',
+              'attribute vec2 uvPieces;',
+              'varying float vPrintMask;',
+              'varying vec2 vUvFront;',
+              'varying vec2 vUvBack;',
+              'varying vec2 vUvPieces;',
+            ].join('\n'),
+          )
+          .replace(
+            '#include <begin_vertex>',
+            ['#include <begin_vertex>', 'vPrintMask = printMask;', 'vUvFront = uvFront;', 'vUvBack = uvBack;', 'vUvPieces = uvPieces;'].join('\n'),
+          );
         shader.fragmentShader = shader.fragmentShader
-          .replace('#include <common>', ['#include <common>', 'varying float vPrintMask;'].join('\n'))
+          .replace(
+            '#include <common>',
+            [
+              '#include <common>',
+              'uniform float uPieces;',
+              'varying float vPrintMask;',
+              'varying vec2 vUvFront;',
+              'varying vec2 vUvBack;',
+              'varying vec2 vUvPieces;',
+            ].join('\n'),
+          )
           .replace(
             '#include <map_fragment>',
             [
               '#ifdef USE_MAP',
-              '  vec4 printColor = texture2D( map, vMapUv );',
+              '  vec4 printColor;',
+              '  if (uPieces > 0.5) {',
+              '    printColor = texture2D( map, vUvPieces );',
+              '  } else {',
+              '    vec4 pa = texture2D( map, vUvFront );',
+              '    vec4 pb = texture2D( map, vUvBack );',
+              '    float alpha = pa.a + pb.a * (1.0 - pa.a);',
+              '    vec3 rgb = (pa.rgb * pa.a + pb.rgb * pb.a * (1.0 - pa.a)) / max(alpha, 0.0001);',
+              '    printColor = vec4(rgb, alpha);',
+              '  }',
               '  diffuseColor.rgb = mix( diffuseColor.rgb, printColor.rgb, printColor.a * vPrintMask );',
               '#endif',
             ].join('\n'),
@@ -85,17 +125,18 @@ function PatternGarment({
       materials.push(mat);
     });
     return { root, materials, analysis };
-  }, [scene, rotationY]);
+  }, [scene, rotationY, piecesMode]);
 
   useEffect(() => onAnalysis(analysis), [analysis, onAnalysis]);
   // Cada modo lee su propia textura (y su propio juego de UV).
   useEffect(() => {
+    piecesMode.value = mode === 'pieces' ? 1 : 0;
     const texture = getPrintTexture(mode);
     materials.forEach((m) => {
       m.map = texture;
       m.needsUpdate = true;
     });
-  }, [materials, mode]);
+  }, [materials, mode, piecesMode]);
   useEffect(() => {
     materials.forEach((m) => m.color.set(color));
   }, [materials, color]);

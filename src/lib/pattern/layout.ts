@@ -20,3 +20,13 @@ export const uvToPx = (u: number, v: number): [number, number] => [
   ((u - PATTERN_UV.u0) / (PATTERN_UV.u1 - PATTERN_UV.u0)) * PATTERN_W,
   ((v - PATTERN_UV.v0) / (PATTERN_UV.v1 - PATTERN_UV.v0)) * PATTERN_H,
 ];
+
+/** Los dos tipos de lienzo: piezas sueltas o tendidos unidos por sus costuras. */
+export type PatternMode = 'pieces' | 'joined';
+
+/** Lienzo de los tendidos unidos: dos tendidos (delantero y espalda) uno junto a otro. */
+export const JOINED_W = 2600;
+export const JOINED_H = 1300;
+
+export const sizeOf = (mode: PatternMode) =>
+  mode === 'joined' ? { w: JOINED_W, h: JOINED_H } : { w: PATTERN_W, h: PATTERN_H };
