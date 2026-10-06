@@ -19,6 +19,17 @@ Atelier digital de **lujo silencioso** para diseñar sudaderas con IA y compilar
   invisible (6 %); vuelve al pasar el ratón o 0,9 s después de soltar.
 ```
 
+## Empezar en dos minutos
+
+1. **Arrancar:** doble clic en `Iniciar-Atelier.bat` (compila y abre `http://localhost:3000`). Para tocar el código usa `Iniciar-Atelier-Desarrollo.bat`. Necesita tu modelo en `public\models\hoodie.glb`.
+2. **Añadir un diseño** (barra «Añadir» a la izquierda del visor, o el paso 1 del panel): subir una imagen (también se puede soltar sobre la prenda), una plantilla, un texto o crear un motivo con IA (en «+ IA» se pega la clave de OpenAI una vez).
+3. **Moverlo directamente sobre la prenda:** pulsar el diseño, arrastrar; las esquinas cambian el tamaño y el círculo superior lo gira.
+4. **Darle estilo** (paso 3 «Ajustar»): *Estilos rápidos* de un toque (plata, cromo, oro bordado, neón…), color liso o degradado, y acabado: estampado, reflectante, bordado en relieve o tono sobre tono.
+5. **Tratar una zona aparte** (por ejemplo las alas de un dragón): botón **Partes** → pintar la zona → «Separar parte». Cada parte tiene su propio color, degradado y acabado.
+6. **Entregar** (paso 4): dossier PDF de taller y archivos por técnica.
+
+En el visor: *Fondo claro/oscuro*, *Fija/Girando* (la prenda gira sola mientras no se edita), *Modelo limpio/Con detalles* (cordones, cremalleras y puntadas del GLB) y *Calibrar* (ajustar el modelo a la escala real).
+
 ## Stack
 
 | Capa | Tecnología |
