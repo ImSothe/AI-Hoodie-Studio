@@ -1,5 +1,6 @@
 import { Box3, BufferGeometry, Euler, Float32BufferAttribute, Raycaster, Vector3, type Mesh, type Object3D } from 'three';
 import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
+import { BODY_Z_UNDER_HOOD } from './modelConfig';
 import { HPS_Y, PX_PER_CM, VIEW_SPECS, getDesignZoneRect, type HoodieView } from '../hoodie/spec';
 
 /**
@@ -44,7 +45,26 @@ export interface DecalProjector {
    * de él y el frente por delante, así un diseño nunca pasa al otro lado.
    */
   zMid: number;
+  /**
+   * La capucha va por encima de la espalda: no se estampa sobre ella. Sus paneles
+   * se descartan y, en los paneles mixtos, los triángulos que la forman.
+   */
+  hood: HoodRegion | null;
 }
+
+export interface HoodRegion {
+  box: Box3;
+  hpsY: number;
+  /** Paneles que sobresalen del grosor del cuerpo en la zona de la capucha: todo lo que tienen ahí es capucha. */
+  sticksOut: Set<Mesh>;
+}
+
+/** Holgura (m) alrededor de la capucha; por delante empieza a la altura del HPS. */
+const HOOD_EDGE_MARGIN_M = 0.03;
+/** Un panel que empieza por encima de HPS - este margen (m) es capucha. */
+const HOOD_MIN_BELOW_HPS_M = 0.18;
+
+export const isHoodMesh = (m: Mesh, hpsY: number) => new Box3().setFromObject(m).min.y >= hpsY - HOOD_MIN_BELOW_HPS_M;
 
 /** Parche de decal ya recortado sobre un panel, en coordenadas de mundo. */
 export interface DecalPatch {
@@ -122,7 +142,33 @@ export function garmentMeshes(root: Object3D) {
  */
 export function computeProjector(root: Object3D, view: HoodieView, { hpsY, scale, offsetYCm }: PlacementOptions): DecalProjector | null {
   root.updateMatrixWorld(true);
-  const meshes = garmentMeshes(root);
+  const all = garmentMeshes(root);
+  const hoodPanels = all.filter((m) => isHoodMesh(m, hpsY));
+  const meshes = all.filter((m) => !hoodPanels.includes(m));
+  let hood: HoodRegion | null = null;
+  if (hoodPanels.length) {
+    const box = new Box3();
+    hoodPanels.forEach((m) => box.expandByObject(m));
+    const [zLo, zHi] = BODY_Z_UNDER_HOOD;
+    const sticksOut = new Set<Mesh>();
+    const p = new Vector3();
+    for (const mesh of meshes) {
+      const pos = mesh.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        p.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+        if (
+          p.x > box.min.x - HOOD_EDGE_MARGIN_M &&
+          p.x < box.max.x + HOOD_EDGE_MARGIN_M &&
+          p.y > box.min.y - HOOD_EDGE_MARGIN_M &&
+          (p.z < zLo || p.z > zHi)
+        ) {
+          sticksOut.add(mesh);
+          break;
+        }
+      }
+    }
+    hood = { box, hpsY, sticksOut };
+  }
   if (!meshes.length) return null;
 
   const zone = getDesignZoneRect(view);
@@ -149,12 +195,36 @@ export function computeProjector(root: Object3D, view: HoodieView, { hpsY, scale
   return {
     view,
     meshes,
+    hood,
     zMid: count ? sum / count : (box.max.z + box.min.z) / 2,
     position: new Vector3(0, centerY, (box.max.z + box.min.z) / 2),
     // De espalda el proyector gira 180° para que el gráfico se lea sin espejo.
     rotation: new Euler(0, view === 'front' ? 0 : Math.PI, 0),
     size: new Vector3(zone.width * metersPerPx, zone.height * metersPerPx, depth),
   };
+}
+
+/** ¿Es este triángulo (en mundo) parte de la capucha? Detrás: la que cuelga sobre la espalda; delante: lo que está a la altura del cuello o más arriba. */
+function isHoodTriangle(
+  hood: HoodRegion,
+  zMid: number,
+  mesh: Mesh,
+  pos: { getX: (i: number) => number; getY: (i: number) => number; getZ: (i: number) => number },
+  i: number,
+  _a: Vector3,
+  _b: Vector3,
+  _c: Vector3,
+) {
+  const x = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3;
+  const y = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
+  const z = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+  const { box } = hood;
+  const inRegion =
+    x > box.min.x - HOOD_EDGE_MARGIN_M && x < box.max.x + HOOD_EDGE_MARGIN_M && y > box.min.y - HOOD_EDGE_MARGIN_M;
+  if (!inRegion) return false;
+  const [zLo, zHi] = BODY_Z_UNDER_HOOD;
+  const sticks = hood.sticksOut.has(mesh);
+  return z < zMid ? sticks || z < zLo : y > hood.hpsY && (sticks || z > zHi);
 }
 
 /** Genera un parche por panel con la misma proyección y descarta las caras que no miran al proyector. */
@@ -167,6 +237,7 @@ export function buildDecalPatches(projector: DecalProjector): DecalPatch[] {
   const c = new Vector3();
   const n = new Vector3();
 
+  const hood = projector.hood;
   for (const mesh of projector.meshes) {
     mesh.updateWorldMatrix(true, false);
     const raw = new DecalGeometry(mesh, projector.position, projector.rotation, projector.size);
@@ -200,6 +271,7 @@ export function buildDecalPatches(projector: DecalProjector): DecalPatch[] {
         bestSide = Math.max(bestSide, (pos.getZ(i + k) - projector.zMid) * side);
       }
       if (bestFacing < KEEP_FACING || bestSide < 0) continue;
+      if (hood && isHoodTriangle(hood, projector.zMid, mesh, pos, i, a, b, c)) continue;
       for (let k = 0; k < 3; k++) {
         keptPos.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
         keptUv.push(uv.getX(i + k), uv.getY(i + k));

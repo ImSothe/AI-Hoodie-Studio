@@ -33,3 +33,10 @@ export const FABRIC_MATERIAL = {
   sheenColor: '#77777a',
 } as const;
 
+
+/**
+ * Grosor (z de mundo, en m) que ocupa el cuerpo bajo la capucha. Lo que cae fuera
+ * de este rango dentro de la zona de la capucha es capucha. Medido en el
+ * hoodie.glb actual; ajústalo si cambias de modelo.
+ */
+export const BODY_Z_UNDER_HOOD: [number, number] = [-0.105, 0.125];
