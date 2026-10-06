@@ -106,7 +106,7 @@ export function TextileCanvas() {
   };
 
   return (
-    <section className={open ? 'border-b border-line px-6 pt-5 pb-4' : 'border-b border-line px-6 py-3'}>
+    <section className={open ? 'border-b border-line px-(--pad-x) pt-4 pb-4' : 'border-b border-line px-(--pad-x) py-3'}>
       <header className={open ? 'mb-3 flex items-baseline justify-between gap-2' : 'flex items-baseline justify-between gap-2'}>
         <h2 className="label-tech text-fg">Lienzo 2D</h2>
         <Segmented<HoodieView>

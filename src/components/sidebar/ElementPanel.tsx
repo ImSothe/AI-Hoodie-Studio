@@ -203,14 +203,22 @@ export function ElementPanel() {
 
   return (
     <>
-      <div className="border-b border-line px-6 pt-6 pb-5">
+      <div className="border-b border-line px-(--pad-x) pt-(--pad-y) pb-4">
         <div className="flex items-baseline justify-between">
           <span className="num text-[11px] text-muted">{style.code}</span>
           <span className="label-tech">{KIND_LABEL[style.kind]}</span>
         </div>
         <p className="mt-3 truncate font-serif text-2xl font-normal tracking-[0.06em] text-fg">{style.name}</p>
         {technique && (
-          <div className="mt-4">
+          <details className="group mt-3">
+            <summary className="label-tech flex cursor-pointer list-none items-center justify-between py-1 transition hover:text-fg [&::-webkit-details-marker]:hidden">
+              Ficha técnica
+              <span className="num text-[10px] text-muted">
+                {TECHNIQUE_INFO[technique].code}
+                {style.inkColor ? ` · ${style.inkColor.toUpperCase()}` : ''}
+              </span>
+            </summary>
+            <div className="mt-2">
             <SpecRow label="Técnica">{TECHNIQUE_INFO[technique].code}</SpecRow>
             {style.inkColor && (
               <>
@@ -220,7 +228,8 @@ export function ElementPanel() {
               </>
             )}
             {style.fontFamily && <SpecRow label="Fuente">{style.fontFamily}</SpecRow>}
-          </div>
+            </div>
+          </details>
         )}
       </div>
       <ActionsBar />

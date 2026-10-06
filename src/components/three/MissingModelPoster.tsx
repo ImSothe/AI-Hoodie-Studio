@@ -6,7 +6,7 @@ import { Button } from '../ui/Button';
 /** Aviso a pantalla completa del visor cuando no hay hoodie.glb (o está corrupto). */
 export function MissingModelPoster({ error, onRetry }: { error?: string; onRetry: () => void }) {
   return (
-    <div role="alert" className="absolute inset-0 grid place-items-center p-8 md:pl-[420px]">
+    <div role="alert" className="absolute inset-0 grid place-items-center p-8 md:pl-[calc(var(--panel-w)+36px)]">
       <div className="w-full max-w-2xl text-center">
         <p className="label-tech">{error ? 'Error de modelo' : 'Modelo no encontrado'}</p>
         <h2 className="mt-6 font-serif text-4xl leading-tight font-normal tracking-[0.12em] text-fg uppercase md:text-6xl">

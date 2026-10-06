@@ -27,6 +27,24 @@
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/*
+ * Densidad de la interfaz. En pantallas de 1080p o menores (poca altura o poco
+ * ancho) el panel se estrecha y se reducen los espaciados: la prenda 3D gana
+ * sitio. Todo lo que depende del ancho del panel lee --panel-w.
+ */
+:root {
+  --panel-w: 384px;
+  --pad-x: 24px;
+  --pad-y: 24px;
+}
+@media (max-width: 1799px), (max-height: 1000px) {
+  :root {
+    --panel-w: 348px;
+    --pad-x: 20px;
+    --pad-y: 18px;
+  }
+}
+
 html,
 body {
   height: 100%;

@@ -9,7 +9,8 @@ import { useCalibration } from '@/lib/three/calibration';
 import { printCenterY } from '@/lib/three/decalPlacement';
 import { MODEL_HPS_Y } from '@/lib/three/modelConfig';
 
-const DISTANCE = 2.6;
+/** Distancia de la cámara: más cerca en pantallas de poca altura (1080p), para que la prenda ocupe más. */
+const distance = () => (typeof window !== 'undefined' && window.innerHeight <= 1000 ? 2.3 : 2.6);
 const EYE_Y = 0.08;
 const TARGET_Y = -0.02;
 
@@ -20,13 +21,13 @@ const TARGET_Y = -0.02;
 export function cameraPose(preset: CameraPreset, activeView: HoodieView, detailDistance = 0.95) {
   switch (preset) {
     case 'front':
-      return { position: new Vector3(0, EYE_Y, DISTANCE), target: new Vector3(0, TARGET_Y, 0) };
+      return { position: new Vector3(0, EYE_Y, distance()), target: new Vector3(0, TARGET_Y, 0) };
     case 'back':
-      return { position: new Vector3(0, EYE_Y, -DISTANCE), target: new Vector3(0, TARGET_Y, 0) };
+      return { position: new Vector3(0, EYE_Y, -distance()), target: new Vector3(0, TARGET_Y, 0) };
     case 'right':
-      return { position: new Vector3(-DISTANCE, EYE_Y, 0), target: new Vector3(0, TARGET_Y, 0) };
+      return { position: new Vector3(-distance(), EYE_Y, 0), target: new Vector3(0, TARGET_Y, 0) };
     case 'left':
-      return { position: new Vector3(DISTANCE, EYE_Y, 0), target: new Vector3(0, TARGET_Y, 0) };
+      return { position: new Vector3(distance(), EYE_Y, 0), target: new Vector3(0, TARGET_Y, 0) };
     case 'detail': {
       const { scale, offsetYCm } = useCalibration.getState();
       const y = printCenterY(activeView, { hpsY: MODEL_HPS_Y, scale, offsetYCm });

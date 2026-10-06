@@ -107,7 +107,7 @@ export function SelectionFrame({ getThree }: { getThree: MutableRefObject<(() =>
 
   if (!facing) {
     return (
-      <div className="pointer-events-none absolute inset-x-0 top-28 z-20 flex justify-center md:pl-[420px]">
+      <div className="pointer-events-none absolute inset-x-0 top-28 z-20 flex justify-center md:pl-[calc(var(--panel-w)+36px)]">
         <button
           type="button"
           onClick={() => useStudio.getState().focusView(activeView)}

@@ -20,7 +20,7 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="border-b border-line px-6 py-6">
+    <section className="border-b border-line px-(--pad-x) py-(--pad-y)">
       <header className="mb-5 flex items-baseline justify-between gap-3">
         <h2 className="label-tech flex items-baseline gap-3">
           {index && <span className="num text-[9px] tracking-normal text-muted">{index}</span>}

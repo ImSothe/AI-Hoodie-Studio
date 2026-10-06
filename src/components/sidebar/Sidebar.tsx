@@ -28,7 +28,7 @@ export function Sidebar() {
 
   return (
     <aside className="glass thin-scroll flex h-full min-h-0 w-full flex-col overflow-y-auto border-t border-white/10 md:border">
-      <div className="flex items-end justify-between gap-3 border-b border-line px-6 pt-6 pb-5">
+      <div className="flex items-end justify-between gap-3 border-b border-line px-(--pad-x) pt-(--pad-y) pb-4">
         <div>
           <h1 className="text-[11px] font-normal tracking-[0.42em] whitespace-nowrap text-fg uppercase">AI Hoodie Studio</h1>
           <p className="mt-1.5 font-editorial text-[15px] font-light text-muted italic">Atelier numérique — {season}</p>
@@ -62,7 +62,7 @@ export function Sidebar() {
               aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
               className={cn(
-                'relative flex-1 border-b py-3.5 text-center transition duration-300',
+                'relative flex-1 border-b py-3 text-center transition duration-300',
                 tab === t.id ? 'border-fg text-fg' : 'border-transparent text-muted hover:text-fg',
               )}
             >
@@ -74,7 +74,7 @@ export function Sidebar() {
             </button>
           ))}
         </div>
-        <p className="border-b border-line px-6 py-2.5 text-[10.5px] font-light tracking-[0.04em] text-muted">{step.hint}</p>
+        <p className="border-b border-line px-(--pad-x) py-2 text-[10.5px] font-light tracking-[0.04em] text-muted">{step.hint}</p>
         <TextileCanvas />
       </div>
 

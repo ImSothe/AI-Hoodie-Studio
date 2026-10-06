@@ -31,7 +31,7 @@ function Templates() {
     useStudio.getState().setSidebarTab('element');
   };
   return (
-    <section className="border-b border-line px-6 py-5">
+    <section className="border-b border-line px-(--pad-x) py-5">
       <h2 className="label-tech mb-4 text-fg">Plantillas</h2>
       <ul className="grid grid-cols-4 gap-2">
         {TEMPLATES.map((t) => (
@@ -83,7 +83,7 @@ export function DesignPanel() {
 
   return (
     <>
-      <section className="border-b border-line px-6 pt-5 pb-5">
+      <section className="border-b border-line px-(--pad-x) pt-5 pb-5">
         <p className="font-editorial text-[14px] leading-snug font-light text-muted italic">
           {hasPieces
             ? `Añada más piezas a la ${VIEW_SPECS[activeView].label.toLowerCase()} o toque una en la prenda para moverla.`

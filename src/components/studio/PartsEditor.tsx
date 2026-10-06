@@ -7,13 +7,55 @@ import type { Styled } from '@/lib/fabric/tint';
 import { useStudio } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
-type Tool = 'brush' | 'eraser' | 'wand';
+type Freehand = 'brush' | 'eraser' | 'wand';
+type Geo = 'rect' | 'ellipse' | 'triangle' | 'polygon';
+type Tool = Freehand | Geo;
+type Pt = { x: number; y: number };
 
-const TOOLS: { id: Tool; label: string; hint: string }[] = [
-  { id: 'brush', label: 'Pincel', hint: 'Pinte encima de la zona que quiere separar' },
-  { id: 'eraser', label: 'Goma', hint: 'Borre lo que sobre' },
-  { id: 'wand', label: 'Varita', hint: 'Un clic selecciona la zona del mismo color' },
+const isGeo = (t: Tool): t is Geo => t === 'rect' || t === 'ellipse' || t === 'triangle' || t === 'polygon';
+
+const FREEHAND: { id: Freehand; label: string; hint: string }[] = [
+  { id: 'brush', label: 'Pincel', hint: 'Pinte encima de la zona que quiere separar.' },
+  { id: 'eraser', label: 'Goma', hint: 'Borre lo que sobre.' },
+  { id: 'wand', label: 'Varita', hint: 'Un clic selecciona la zona del mismo color.' },
 ];
+
+const SHAPES: { id: Geo; label: string; hint: string }[] = [
+  { id: 'rect', label: 'Rectángulo', hint: 'Arrastre para dibujar un rectángulo. Con Mayús sale un cuadrado.' },
+  { id: 'ellipse', label: 'Círculo', hint: 'Arrastre para dibujar una elipse. Con Mayús sale un círculo perfecto.' },
+  { id: 'triangle', label: 'Triángulo', hint: 'Arrastre: la base es el ancho del recuadro y el vértice queda arriba.' },
+  {
+    id: 'polygon',
+    label: 'Polígono',
+    hint: 'Pulse para marcar vértices. Se cierra pulsando el primer punto, con doble clic o con Intro. Retroceso borra el último; Esc cancela.',
+  },
+];
+
+/** Recuadro que forman dos esquinas (con `constrain`, cuadrado). */
+function boundsOf(a: Pt, b: Pt, constrain: boolean) {
+  let w = b.x - a.x;
+  let h = b.y - a.y;
+  if (constrain) {
+    const side = Math.max(Math.abs(w), Math.abs(h));
+    w = (w < 0 ? -1 : 1) * side;
+    h = (h < 0 ? -1 : 1) * side;
+  }
+  return { x: Math.min(a.x, a.x + w), y: Math.min(a.y, a.y + h), w: Math.abs(w), h: Math.abs(h) };
+}
+
+/** Traza una figura arrastrada entre dos esquinas (rectángulo, elipse o triángulo). */
+function traceShape(ctx: CanvasRenderingContext2D, kind: Exclude<Geo, 'polygon'>, a: Pt, b: Pt, constrain: boolean) {
+  const r = boundsOf(a, b, constrain);
+  ctx.beginPath();
+  if (kind === 'rect') ctx.rect(r.x, r.y, r.w, r.h);
+  else if (kind === 'ellipse') ctx.ellipse(r.x + r.w / 2, r.y + r.h / 2, Math.max(r.w / 2, 0.01), Math.max(r.h / 2, 0.01), 0, 0, Math.PI * 2);
+  else {
+    ctx.moveTo(r.x + r.w / 2, r.y);
+    ctx.lineTo(r.x + r.w, r.y + r.h);
+    ctx.lineTo(r.x, r.y + r.h);
+    ctx.closePath();
+  }
+}
 
 /** Máx. de pasos de «Deshacer». */
 const HISTORY = 20;
@@ -41,6 +83,10 @@ function Editor({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('Parte');
   const [hasMask, setHasMask] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** Las figuras suman a la selección o la restan. */
+  const [mode, setMode] = useState<'add' | 'subtract'>('add');
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   const bitmap = useRef<HTMLCanvasElement | null>(null);
   const display = useRef<HTMLCanvasElement>(null);
@@ -49,6 +95,9 @@ function Editor({ onClose }: { onClose: () => void }) {
   const history = useRef<ImageData[]>([]);
   const drawing = useRef<{ x: number; y: number } | null>(null);
   const target = useRef<Styled | null>(null);
+  /** Figura que se está arrastrando y polígono en curso (sólo para la vista previa y el trazo). */
+  const shapeRef = useRef<{ kind: Exclude<Geo, 'polygon'>; a: Pt; b: Pt; constrain: boolean } | null>(null);
+  const polyRef = useRef<{ points: Pt[]; hover: Pt | null } | null>(null);
 
   // Rasteriza la pieza seleccionada.
   useEffect(() => {
@@ -98,6 +147,38 @@ function Editor({ onClose }: { onClose: () => void }) {
     ctx.fillStyle = 'rgba(255, 64, 96, 0.62)';
     ctx.fillRect(0, 0, ov.width, ov.height);
     ctx.globalCompositeOperation = 'source-over';
+
+    // Vista previa de la figura que se dibuja: borde punteado y relleno translúcido.
+    const shape = shapeRef.current;
+    const poly = polyRef.current;
+    if (!shape && !(poly && poly.points.length)) return;
+    const lw = Math.max(1.5, ov.width / 450);
+    const color = modeRef.current === 'subtract' ? '#ff8aa0' : '#ffffff';
+    ctx.save();
+    ctx.lineWidth = lw;
+    ctx.setLineDash([lw * 4, lw * 3]);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = modeRef.current === 'subtract' ? 'rgba(255,138,160,0.16)' : 'rgba(255,255,255,0.16)';
+    if (shape) {
+      traceShape(ctx, shape.kind, shape.a, shape.b, shape.constrain);
+      ctx.fill();
+      ctx.stroke();
+    }
+    if (poly && poly.points.length) {
+      const pts = poly.hover ? [...poly.points, poly.hover] : poly.points;
+      ctx.beginPath();
+      pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = color;
+      const half = lw * 2.4;
+      poly.points.forEach((p, i) => {
+        const size = i === 0 ? half * 1.5 : half;
+        ctx.fillRect(p.x - size, p.y - size, size * 2, size * 2);
+      });
+    }
+    ctx.restore();
   }, []);
 
   useEffect(() => {
@@ -203,10 +284,67 @@ function Editor({ onClose }: { onClose: () => void }) {
     ctx.globalCompositeOperation = 'source-over';
   };
 
+  /** Aplica una figura a la máscara (suma o resta, según el modo) como un solo paso de deshacer. */
+  const applyToMask = (trace: (ctx: CanvasRenderingContext2D) => void) => {
+    snapshot();
+    const ctx = mask.current!.getContext('2d')!;
+    ctx.save();
+    ctx.globalCompositeOperation = modeRef.current === 'subtract' ? 'destination-out' : 'source-over';
+    ctx.fillStyle = '#fff';
+    trace(ctx);
+    ctx.fill();
+    ctx.restore();
+    refresh();
+  };
+
+  const finishPolygon = () => {
+    const poly = polyRef.current;
+    polyRef.current = null;
+    if (poly && poly.points.length >= 3) {
+      applyToMask((ctx) => {
+        ctx.beginPath();
+        poly.points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+        ctx.closePath();
+      });
+    } else redraw();
+  };
+
+  const chooseTool = (next: Tool) => {
+    polyRef.current = null;
+    shapeRef.current = null;
+    setTool(next);
+    redraw();
+  };
+
   const onDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!ready) return;
     e.preventDefault();
     const p = toBitmap(e);
+
+    if (tool === 'polygon') {
+      const poly = polyRef.current ?? (polyRef.current = { points: [], hover: null });
+      const first = poly.points[0];
+      const last = poly.points[poly.points.length - 1];
+      const near = (q: Pt, radius: number) => Math.hypot(q.x - p.x, q.y - p.y) <= radius * p.scale;
+      if (first && poly.points.length >= 3 && near(first, 12)) {
+        finishPolygon(); // se cierra sobre el primer punto
+        return;
+      }
+      if (!last || !near(last, 3)) poly.points.push({ x: p.x, y: p.y }); // el doble clic no duplica el vértice
+      redraw();
+      return;
+    }
+
+    if (isGeo(tool)) {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* puntero sintético */
+      }
+      shapeRef.current = { kind: tool, a: { x: p.x, y: p.y }, b: { x: p.x, y: p.y }, constrain: e.shiftKey };
+      return;
+    }
+
     snapshot();
     if (tool === 'wand') {
       wand(p.x, p.y);
@@ -224,6 +362,20 @@ function Editor({ onClose }: { onClose: () => void }) {
   };
 
   const onMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    const shape = shapeRef.current;
+    if (shape) {
+      const p = toBitmap(e);
+      shape.b = { x: p.x, y: p.y };
+      shape.constrain = e.shiftKey;
+      redraw();
+      return;
+    }
+    if (polyRef.current) {
+      const p = toBitmap(e);
+      polyRef.current.hover = { x: p.x, y: p.y };
+      redraw();
+      return;
+    }
     if (!drawing.current) return;
     const p = toBitmap(e);
     stroke(drawing.current, p, p.scale);
@@ -232,6 +384,14 @@ function Editor({ onClose }: { onClose: () => void }) {
   };
 
   const onUp = () => {
+    const shape = shapeRef.current;
+    if (shape) {
+      shapeRef.current = null;
+      const r = boundsOf(shape.a, shape.b, shape.constrain);
+      if (r.w >= 2 && r.h >= 2) applyToMask((ctx) => traceShape(ctx, shape.kind, shape.a, shape.b, shape.constrain));
+      else redraw();
+      return;
+    }
     if (!drawing.current) return;
     drawing.current = null;
     refresh();
@@ -292,7 +452,27 @@ function Editor({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      const poly = polyRef.current;
+      if (poly && e.key === 'Enter') {
+        e.preventDefault();
+        finishPolygon();
+        return;
+      }
+      if (poly && e.key === 'Backspace') {
+        e.preventDefault();
+        poly.points.pop();
+        if (!poly.points.length) polyRef.current = null;
+        redraw();
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (poly || shapeRef.current) {
+          polyRef.current = null;
+          shapeRef.current = null;
+          redraw();
+        } else onClose();
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undo();
@@ -320,7 +500,8 @@ function Editor({ onClose }: { onClose: () => void }) {
                 width={bmp.width}
                 height={bmp.height}
                 className="absolute inset-0 size-full touch-none"
-                style={{ cursor: tool === 'wand' ? 'crosshair' : 'cell' }}
+                style={{ cursor: tool === 'wand' || isGeo(tool) ? 'crosshair' : 'cell' }}
+                onDoubleClick={() => tool === 'polygon' && finishPolygon()}
                 onPointerDown={onDown}
                 onPointerMove={onMove}
                 onPointerUp={onUp}
@@ -336,26 +517,69 @@ function Editor({ onClose }: { onClose: () => void }) {
           <header>
             <h2 className="label-tech text-fg">Separar una parte</h2>
             <p className="mt-2 font-editorial text-[14px] leading-snug font-light text-muted italic">
-              Pinte la zona que quiere tratar aparte (las alas, un adorno…). Después tendrá su propio color, degradado y acabado.
+              Marque la zona que quiere tratar aparte (las alas, un adorno…) con el pincel o con formas exactas. Después tendrá su propio color, degradado y acabado.
             </p>
           </header>
 
-          <div role="radiogroup" aria-label="Herramienta" className="grid grid-cols-3 gap-px bg-line">
-            {TOOLS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="radio"
-                aria-checked={tool === t.id}
-                title={t.hint}
-                onClick={() => setTool(t.id)}
-                className={cn('py-2.5 text-[10px] tracking-[0.18em] uppercase transition', tool === t.id ? 'bg-fg text-ink' : 'bg-black text-fg hover:bg-white/5')}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div className="space-y-2">
+            <p className="label-tech">A mano</p>
+            <div role="radiogroup" aria-label="Herramienta a mano" className="grid grid-cols-3 gap-px bg-line">
+              {FREEHAND.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={tool === t.id}
+                  title={t.hint}
+                  onClick={() => chooseTool(t.id)}
+                  className={cn('py-2.5 text-[10px] tracking-[0.18em] uppercase transition', tool === t.id ? 'bg-fg text-ink' : 'bg-black text-fg hover:bg-white/5')}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <p className="label-tech pt-2">Formas exactas</p>
+            <div role="radiogroup" aria-label="Forma geométrica" className="grid grid-cols-2 gap-px bg-line">
+              {SHAPES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={tool === t.id}
+                  title={t.hint}
+                  onClick={() => chooseTool(t.id)}
+                  className={cn('py-2.5 text-[10px] tracking-[0.18em] uppercase transition', tool === t.id ? 'bg-fg text-ink' : 'bg-black text-fg hover:bg-white/5')}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <p className="-mt-3 text-[10.5px] font-light text-muted">{TOOLS.find((t) => t.id === tool)?.hint}</p>
+          <p className="-mt-3 text-[10.5px] leading-snug font-light text-muted">
+            {[...FREEHAND, ...SHAPES].find((t) => t.id === tool)?.hint}
+          </p>
+
+          {isGeo(tool) && (
+            <div role="radiogroup" aria-label="Modo de la figura" className="grid grid-cols-2 gap-px bg-line">
+              {(
+                [
+                  ['add', 'Sumar'],
+                  ['subtract', 'Restar'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === value}
+                  onClick={() => setMode(value)}
+                  className={cn('py-2 text-[10px] tracking-[0.18em] uppercase transition', mode === value ? 'bg-fg text-ink' : 'bg-black text-fg hover:bg-white/5')}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {tool === 'wand' ? (
             <div className="space-y-3">
@@ -371,7 +595,7 @@ function Editor({ onClose }: { onClose: () => void }) {
                 En todo el dibujo (no sólo la zona contigua)
               </label>
             </div>
-          ) : (
+          ) : isGeo(tool) ? null : (
             <label className="block">
               <span className="flex justify-between">
                 <span className="label-tech">Tamaño</span>

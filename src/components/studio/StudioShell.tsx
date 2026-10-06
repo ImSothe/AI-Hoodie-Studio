@@ -32,7 +32,7 @@ export function StudioShell() {
       <div
         className={cn(
           'relative min-h-0 flex-1 transition-opacity duration-700 ease-out',
-          'md:absolute md:top-5 md:bottom-5 md:left-5 md:w-[384px] md:hover:opacity-100',
+          'md:absolute md:top-5 md:bottom-5 md:left-5 md:w-(--panel-w) md:hover:opacity-100',
           immersive && 'md:opacity-[0.06]',
         )}
       >

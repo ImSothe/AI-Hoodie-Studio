@@ -27,7 +27,7 @@ export function ActionsBar() {
   const single = style?.count === 1;
   const cell = 'bg-black px-2 py-3 text-[10px] tracking-[0.16em] text-fg uppercase transition hover:bg-white/5 disabled:opacity-25 disabled:hover:bg-black';
   return (
-    <section className="border-b border-line px-6 py-4">
+    <section className="border-b border-line px-(--pad-x) py-4">
       <div className="grid grid-cols-2 gap-px bg-line">
         <button type="button" className={cell} disabled={!flags.undo} onClick={() => undo(view)} title="Revierte el último cambio (Ctrl+Z)">
           ↶ Deshacer

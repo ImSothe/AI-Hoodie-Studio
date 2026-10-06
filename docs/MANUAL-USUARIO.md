@@ -115,6 +115,7 @@ Para tratar aparte una zona que no es un rectángulo, por ejemplo las alas de un
 
 1. Selecciona la pieza y pulsa **Partes**.
 2. Pinta con el **pincel** encima de la zona (la **goma** borra lo que sobra). La **varita** selecciona de un clic una zona del mismo color, y puede ser en todo el dibujo.
+   Para formas exactas usa **Rectángulo**, **Círculo** o **Triángulo**: arrastra y verás la forma con borde punteado (con Mayús sale cuadrado o círculo perfecto). **Polígono**: haz clic punto a punto y ciérralo pulsando el primer punto, con doble clic o con Intro (Retroceso quita el último punto, Esc cancela). **Sumar** añade la forma a la selección y **Restar** la quita.
 3. **Invertir** selecciona justo lo contrario dentro del dibujo; **Deshacer** y **Limpiar** corrigen la máscara.
 4. **Separar parte**: la zona pasa a ser una pieza nueva con su propio color, degradado y acabado. La pieza original se queda con el resto.
 

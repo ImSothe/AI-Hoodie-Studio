@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { Canvas, type RootState } from '@react-three/fiber';
 import { NeutralToneMapping } from 'three';
 import { useGLTF, useProgress } from '@react-three/drei';
@@ -31,7 +31,20 @@ const PRESETS: { id: CameraPreset; label: string }[] = [
 ];
 
 /** Ancho que ocupa el panel flotante en escritorio (panel + márgenes). */
-const PANEL_SPACE = 404;
+/** Hueco que ocupa el panel (ancho + márgenes): se lee de la variable CSS para seguir a la densidad de pantalla. */
+function usePanelSpace() {
+  const [space, setSpace] = useState(404);
+  useEffect(() => {
+    const read = () => {
+      const width = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--panel-w')) || 384;
+      setSpace(width + 20);
+    };
+    read();
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
+  }, []);
+  return space;
+}
 
 function LoadingOverlay() {
   const { active, progress } = useProgress();
@@ -67,6 +80,7 @@ export function HoodieViewer() {
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const desktop = useDesktop();
+  const panelSpace = usePanelSpace();
   const ready = status.state === 'ready';
   const techniques = [...new Set(elements.map((e) => TECHNIQUE_INFO[e.technique].short))].join(' · ');
 
@@ -133,7 +147,7 @@ export function HoodieViewer() {
                 getThree.current = get;
               }}
             >
-              <HoodieScene frameOffsetPx={desktop ? PANEL_SPACE / 2 : 0} directEdit />
+              <HoodieScene frameOffsetPx={desktop ? panelSpace / 2 : 0} directEdit />
             </Canvas>
             <LoadingOverlay />
           </ViewerErrorBoundary>
@@ -148,7 +162,7 @@ export function HoodieViewer() {
       {ready && (
         <nav
           aria-label="Añadir a la prenda"
-          className={cn('absolute bottom-24 left-6 z-10 flex flex-col gap-px md:top-1/2 md:bottom-auto md:left-[420px] md:-translate-y-1/2', chrome)}
+          className={cn('absolute bottom-24 left-6 z-10 flex flex-col gap-px md:top-1/2 md:bottom-auto md:left-[calc(var(--panel-w)+36px)] md:-translate-y-1/2', chrome)}
         >
           <span className="label-tech mb-2">Añadir</span>
           {(
@@ -185,7 +199,7 @@ export function HoodieViewer() {
       {/* Cabecera editorial */}
       <header
         className={cn(
-          'pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-6 px-6 pt-6 md:pr-8 md:pl-[440px]',
+          'pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-6 px-6 pt-6 md:pr-8 md:pl-[calc(var(--panel-w)+56px)]',
           chrome,
         )}
       >
@@ -194,7 +208,7 @@ export function HoodieViewer() {
             {season} <span className="mx-2 text-fg/25">|</span>
             <span className="num tracking-[0.12em]">{styleCode}</span>
           </p>
-          <h2 className="mt-3 truncate font-serif text-4xl font-normal tracking-[0.14em] text-fg uppercase md:text-5xl">
+          <h2 className="mt-3 truncate font-serif text-4xl font-normal tracking-[0.14em] text-fg uppercase md:text-5xl [@media(max-height:1000px)]:md:text-4xl">
             {designName || 'Sin título'}
           </h2>
           <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-light tracking-[0.08em] text-muted">
@@ -267,7 +281,7 @@ export function HoodieViewer() {
       {/* Barra de cámaras */}
       <nav
         aria-label="Vistas de cámara"
-        className={cn('absolute inset-x-0 bottom-0 z-10 flex justify-center px-6 pb-7 md:pl-[420px]', chrome)}
+        className={cn('absolute inset-x-0 bottom-0 z-10 flex justify-center px-6 pb-7 md:pl-[calc(var(--panel-w)+36px)]', chrome)}
       >
         <div className="flex max-w-full items-center overflow-x-auto">
           {PRESETS.map((p, i) => (
@@ -291,7 +305,7 @@ export function HoodieViewer() {
       </nav>
 
       {dragOver && (
-        <div className="pointer-events-none absolute inset-8 z-20 grid place-items-center border border-dashed border-fg/30 md:left-[440px]">
+        <div className="pointer-events-none absolute inset-8 z-20 grid place-items-center border border-dashed border-fg/30 md:left-[calc(var(--panel-w)+56px)]">
           <span className="label-tech text-fg">Soltar en la {VIEW_SPECS[activeView].label.toLowerCase()}</span>
         </div>
       )}
