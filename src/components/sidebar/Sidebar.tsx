@@ -42,6 +42,13 @@ export function Sidebar() {
             Configurador
           </Link>
           <Link
+            href="/patron"
+            title="Patrón: diseñe sobre las piezas planas y véalo cosido en 3D"
+            className="border-b border-muted pb-0.5 text-[9px] tracking-[0.22em] whitespace-nowrap text-muted uppercase hover:text-fg"
+          >
+            Patrón
+          </Link>
+          <Link
             href="/ayuda"
             title="Manual de usuario: cómo diseñar y enviar el dossier a fábrica"
             className="border-b border-muted pb-0.5 text-[9px] tracking-[0.22em] whitespace-nowrap text-muted uppercase hover:text-fg"
