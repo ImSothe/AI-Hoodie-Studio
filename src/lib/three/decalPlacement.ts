@@ -17,8 +17,7 @@ import { HPS_Y, PX_PER_CM, VIEW_SPECS, getDesignZoneRect, type HoodieView } from
  */
 
 /** Holgura (m) del proyector por delante y por detrás del tejido. */
-/** Margen (m) de la caja de proyección por fuera de la superficie exterior. */
-const DEPTH_PADDING_M = 0.03;
+const DEPTH_PADDING_M = 0.1;
 /**
  * Una cara se estampa si su normal apunta al proyector con al menos este coseno
  * (≈ 66°). Más abajo la proyección ortográfica estira el dibujo en rayas por
@@ -150,6 +149,7 @@ export function computeProjector(
 
   const box = new Box3();
   meshes.forEach((m) => box.expandByObject(m));
+  const depth = box.max.z - box.min.z + DEPTH_PADDING_M * 2;
 
   // Plano medio: la z media de los vértices del tejido (sigue el cuerpo, no las mangas).
   const v = new Vector3();
@@ -164,17 +164,12 @@ export function computeProjector(
     }
   }
 
-  // Profundidad mínima: sólo desde el plano medio hasta la superficie exterior de la cara activa.
-  const zMid = count ? sum / count : (box.max.z + box.min.z) / 2;
-  const outer = view === 'front' ? box.max.z + DEPTH_PADDING_M : box.min.z - DEPTH_PADDING_M;
-  const depth = Math.abs(outer - zMid);
-
   return {
     view,
     meshes,
     hood,
-    zMid,
-    position: new Vector3(0, centerY, (outer + zMid) / 2),
+    zMid: count ? sum / count : (box.max.z + box.min.z) / 2,
+    position: new Vector3(0, centerY, (box.max.z + box.min.z) / 2),
     // De espalda el proyector gira 180° para que el gráfico se lea sin espejo.
     rotation: new Euler(0, view === 'front' ? 0 : Math.PI, 0),
     size: new Vector3(zone.width * metersPerPx, zone.height * metersPerPx, depth),
