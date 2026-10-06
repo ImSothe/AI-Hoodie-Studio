@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useEffect, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { Box3, MeshPhysicalMaterial, Vector3, type Color, type Material, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
 import { TEXTURE_LAYERS } from '@/lib/fabric/registry';
@@ -10,7 +9,6 @@ import { useStudio } from '@/lib/store';
 import { useCalibration } from '@/lib/three/calibration';
 import { buildDecalPatches, computeProjector, garmentMeshes } from '@/lib/three/decalPlacement';
 import { fabricAlbedo } from '@/lib/three/fabricShading';
-import { createHoodHang } from '@/lib/three/hoodHang';
 import { setGarmentRoot } from '@/lib/three/garmentRegistry';
 import { knitNormalMap } from '@/lib/three/fabricTexture';
 import { FABRIC_MATERIAL, GLB_RECOLOR, GLB_TARGET_HEIGHT, HEM_Y, MODEL_HPS_Y } from '@/lib/three/modelConfig';
@@ -102,42 +100,22 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
   useEffect(() => {
     const panels = new Set<Object3D>(garmentMeshes(root));
     root.traverse((obj) => {
-      if ((obj as Mesh).isMesh && !panels.has(obj) && !obj.userData.hood) obj.visible = showDetails;
+      if ((obj as Mesh).isMesh && !panels.has(obj)) obj.visible = showDetails;
     });
   }, [root, showDetails]);
-
-  // Colgar de la percha: la capucha se estira y se aplana (deformación continua, animada).
-  // Los estampados se recalculan al terminar, para que también pinten sobre la capucha.
-  const hang = useMemo(() => createHoodHang(root), [root]);
-  const hangT = useRef(0);
-  const [hanging, setHanging] = useState(false);
-  useFrame((_, dt) => {
-    if (!hang) return;
-    const target = useStudio.getState().hoodUp ? 1 : 0;
-    if (hangT.current === target) return;
-    const diff = target - hangT.current;
-    hangT.current = Math.abs(diff) < 0.003 ? target : hangT.current + diff * Math.min(1, dt * 4);
-    hang.setProgress(hangT.current);
-    if (hangT.current === target) {
-      hang.settle(target);
-      setHanging(target === 1);
-    } else if (hanging) {
-      setHanging(false);
-    }
-  });
 
   // Un proyector por cara y un parche de decal por panel del tejido.
   const projections = useMemo(
     () =>
       HOODIE_VIEWS.flatMap((view) => {
-        const projector = computeProjector(root, view, { hpsY: MODEL_HPS_Y, scale, offsetYCm }, hanging);
+        const projector = computeProjector(root, view, { hpsY: MODEL_HPS_Y, scale, offsetYCm });
         if (!projector) {
           console.warn(`[hoodie] No se encontró tejido para la cara "${view}". Revisa la calibración.`);
           return [];
         }
         return [{ view, patches: buildDecalPatches(projector) }];
       }),
-    [root, scale, offsetYCm, hanging],
+    [root, scale, offsetYCm],
   );
 
   useEffect(() => () => projections.forEach((p) => p.patches.forEach((patch) => patch.geometry.dispose())), [projections]);

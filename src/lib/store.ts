@@ -69,8 +69,6 @@ interface StudioState {
   autoRotate: boolean;
   /** Muestra cordones, cremalleras y puntadas del modelo (apagado = modelo limpio). */
   showDetails: boolean;
-  /** Capucha levantada: se oculta para ver el cuerpo de la prenda debajo. */
-  hoodUp: boolean;
   /** Captura del visor 3D para incluir en el Tech Pack. */
   snapshot3d: string | null;
 
@@ -104,7 +102,6 @@ interface StudioState {
   setHistoryFlags: (view: HoodieView, flags: { undo: boolean; redo: boolean }) => void;
   setAutoRotate: (value: boolean) => void;
   setShowDetails: (value: boolean) => void;
-  setHoodUp: (value: boolean) => void;
   setSnapshot3d: (dataUrl: string | null) => void;
 }
 
@@ -139,7 +136,6 @@ export const useStudio = create<StudioState>((set) => ({
   history: { front: { undo: false, redo: false }, back: { undo: false, redo: false } },
   autoRotate: false,
   showDetails: false,
-  hoodUp: false,
   snapshot3d: null,
 
   // Al cambiar de cara se limpia la selección (el lienzo oculto la descarta);
@@ -182,6 +178,5 @@ export const useStudio = create<StudioState>((set) => ({
     ),
   setAutoRotate: (autoRotate) => set({ autoRotate }),
   setShowDetails: (showDetails) => set({ showDetails }),
-  setHoodUp: (hoodUp) => set({ hoodUp }),
   setSnapshot3d: (snapshot3d) => set({ snapshot3d }),
 }));

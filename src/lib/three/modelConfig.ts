@@ -33,20 +33,3 @@ export const FABRIC_MATERIAL = {
   sheenColor: '#77777a',
 } as const;
 
-/**
- * Grosor (z de mundo, en m) que ocupa el cuerpo bajo la capucha. Al levantar la
- * capucha, lo que cae fuera de este rango dentro de su zona es capucha y se oculta.
- * Valores medidos en el hoodie.glb actual; ajústalos si cambias de modelo.
- */
-export const BODY_Z_UNDER_HOOD: [number, number] = [-0.105, 0.125];
-
-/**
- * Colgar de la percha: la capucha se estira hacia arriba y se aplana en una lámina
- * detrás de los hombros. Ensanche relativo, estiramiento vertical relativo, subida (m),
- * z de mundo de la lámina (m) y cuánto se aplana (0 = nada, 1 = del todo).
- */
-export const HANG_WIDEN = 0.3;
-export const HANG_STRETCH_Y = 0.08;
-export const HANG_LIFT_M = 0.07;
-export const HANG_Z = -0.125;
-export const HANG_FLATTEN = 0.9;

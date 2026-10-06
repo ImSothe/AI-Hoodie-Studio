@@ -131,16 +131,14 @@ export function computeProjector(
   root: Object3D,
   view: HoodieView,
   { hpsY, scale, offsetYCm }: PlacementOptions,
-  includeHood = false,
 ): DecalProjector | null {
   root.updateMatrixWorld(true);
   const all = garmentMeshes(root);
   // La capucha cae por encima del cuerpo: el estampado va sobre el cuerpo y las mangas, nunca sobre ella.
   const isBody = (m: Mesh) => !isHoodMesh(m, hpsY);
   const body = all.filter(isBody);
-  const meshes = includeHood ? all : body;
-  // Con la capucha colgada y estirada sí se estampa sobre ella; si no, queda fuera.
-  const hoodMeshes = includeHood ? [] : all.filter((m) => !isBody(m));
+  const meshes = body;
+  const hoodMeshes = all.filter((m) => !isBody(m));
   const hood = hoodMeshes.length ? new Box3() : null;
   hoodMeshes.forEach((m) => hood?.expandByObject(m));
   if (!meshes.length) return null;
