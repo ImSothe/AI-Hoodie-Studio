@@ -54,6 +54,9 @@ export function HoodieScene({
 }: HoodieSceneProps) {
   const textures = useDesignTextures();
   const stageMood = useStudio((s) => s.stageMood);
+  const spin = useStudio((s) => s.autoRotate);
+  // Mientras se edita una pieza la prenda se queda quieta.
+  const editing = useStudio((s) => s.selection !== null);
   const setImmersive = useStudio((s) => s.setImmersive);
   const restore = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -81,7 +84,7 @@ export function HoodieScene({
         enablePan={false}
         minDistance={0.6}
         maxDistance={4}
-        autoRotate={autoRotate}
+        autoRotate={autoRotate || (directEdit && spin && !editing)}
         autoRotateSpeed={0.6}
         onStart={onStart}
         onEnd={onEnd}

@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { Segmented } from '../ui/Button';
 import { Section, SpecRow } from '../ui/Section';
 import { ElementInkPanel } from './ColorPanel';
+import { LooksPanel, PartsSection } from './EffectsPanels';
 import { SelectionPanel } from './SelectionPanel';
 import { FontSelect } from './TextPanel';
 
@@ -27,6 +28,14 @@ const KIND_LABEL: Record<ElementKind | 'mixed', string> = {
   png: 'Gráfico raster',
   text: 'Tipografía',
   mixed: 'Selección múltiple',
+};
+
+/** Nombres y explicación en lenguaje llano (el código de taller va en la ficha). */
+const PLAIN: Record<Technique, { name: string; note: string }> = {
+  'Serigrafía Plana': { name: 'Estampado', note: 'Tinta plana y mate. El acabado más versátil.' },
+  'Tinta Reflectante D3O/3M': { name: 'Reflectante', note: 'Refleja la luz del flash: brilla en las fotos.' },
+  'Bordado Alto Relieve': { name: 'Bordado en relieve', note: 'Hilo cosido con volumen que se nota al tacto.' },
+  'Bordado Ton-sur-Ton (Tono sobre Tono)': { name: 'Tono sobre tono', note: 'Bordado del color de la prenda: sólo se ve con la luz.' },
 };
 
 /** Selector de técnica: se guarda como custom data `tecnica` en el objeto de Fabric. */
@@ -54,11 +63,11 @@ function TechniquePicker({ value }: { value: Technique | null }) {
                   active ? 'text-fg' : 'text-muted group-hover:text-fg',
                 )}
               >
-                {t}
+                {PLAIN[t].name}
               </span>
               {active && (
                 <span className="mt-1 block font-editorial text-[13px] leading-snug font-light text-muted italic">
-                  {TECHNIQUE_INFO[t].note}
+                  {PLAIN[t].note}
                 </span>
               )}
             </span>
@@ -207,6 +216,7 @@ export function ElementPanel() {
           </div>
         )}
       </div>
+      <LooksPanel />
       <Section title="Cómo se aplica">
         <TechniquePicker value={technique} />
       </Section>
@@ -215,6 +225,7 @@ export function ElementPanel() {
         <TextFields text={style.text} fontFamily={style.fontFamily} />
       )}
       <ElementInkPanel />
+      <PartsSection />
       <SelectionPanel />
     </>
   );

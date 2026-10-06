@@ -172,6 +172,12 @@ export const FONT_OPTIONS = [
   { family: 'Bodoni Moda', stack: '"Bodoni Moda", serif', weight: 400, label: 'Bodoni Moda — Didone', fallback: null },
   { family: 'Cormorant Garamond', stack: '"Cormorant Garamond", serif', weight: 300, label: 'Cormorant Garamond — Light', fallback: null },
   { family: 'IBM Plex Mono', stack: '"IBM Plex Mono", monospace', weight: 300, label: 'IBM Plex Mono — Light', fallback: null },
+  // Gruesas, para estampados con presencia (cada una con una pila CSS distinta para identificarla).
+  { family: 'Inter Black', stack: '"Inter", "Helvetica Neue", Arial, sans-serif', weight: 900, label: 'Inter — Black', fallback: null },
+  { family: 'Archivo Black', stack: '"Archivo Black", Impact, sans-serif', weight: 400, label: 'Archivo Black — Streetwear', fallback: null },
+  { family: 'Anton', stack: '"Anton", Impact, sans-serif', weight: 400, label: 'Anton — Condensada', fallback: null },
+  { family: 'Bodoni Moda Black', stack: '"Bodoni Moda", "Times New Roman", serif', weight: 900, label: 'Bodoni Moda — Black', fallback: null },
+  { family: 'Playfair Display Black', stack: '"Playfair Display", Georgia, serif', weight: 900, label: 'Playfair Display — Black', fallback: null },
 ] as const;
 
 export type FontOption = (typeof FONT_OPTIONS)[number];
@@ -251,10 +257,17 @@ export const DEFAULT_HARDWARE: HardwareSpec = {
   cordType: 'Redondo Ø 8 mm',
   cordTonal: true,
   cordHex: '#EDE8DF',
-  show3d: true,
+  show3d: false,
 };
 
 /** Resolución objetivo de los PNG de producción. */
 export const PRINT_DPI = 300;
 /** Límite de lado del PNG para no reventar la memoria del navegador. */
 export const MAX_EXPORT_SIDE_PX = 6000;
+
+/** Degradado lineal de dos colores aplicado a una pieza (0° = de izquierda a derecha, 90° = de arriba abajo). */
+export interface GradientSpec {
+  from: string;
+  to: string;
+  angle: number;
+}

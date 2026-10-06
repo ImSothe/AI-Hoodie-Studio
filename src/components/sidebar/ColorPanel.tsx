@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { HexColorInput, HexColorPicker } from 'react-colorful';
-import { contrastRatio, normalizeHex } from '@/lib/color';
+import { contrastRatio, mix, normalizeHex } from '@/lib/color';
+import { clearGradientActive, scheduleGradientActive } from '@/lib/fabric/effects';
 import { restoreActiveColors, scheduleTintActive } from '@/lib/fabric/styleActions';
 import {
   AGLET_LENGTHS_MM,
@@ -18,7 +19,9 @@ import {
 } from '@/lib/hoodie/spec';
 import { useStudio } from '@/lib/store';
 import { cn } from '@/lib/utils';
+import { Segmented } from '../ui/Button';
 import { Section } from '../ui/Section';
+import { GradientEditor } from './EffectsPanels';
 
 /** Carta de tejidos: neutros minerales de colección. */
 const GARMENT_SWATCHES = [
@@ -281,6 +284,11 @@ export function ElementInkPanel() {
     if (!interacting.current) setInk(storeInk);
   }, [storeInk, style]);
 
+  // Liso o degradado: sigue a la pieza seleccionada.
+  const hasGradient = !!style?.gradient;
+  const [mode, setMode] = useState<'solid' | 'gradient'>(hasGradient ? 'gradient' : 'solid');
+  useEffect(() => setMode(hasGradient ? 'gradient' : 'solid'), [hasGradient, style?.code]);
+
   if (!style) return null;
 
   if (style.technique === TONAL_TECHNIQUE) {
@@ -300,13 +308,31 @@ export function ElementInkPanel() {
     scheduleTintActive(hex);
   };
   const lowContrast = contrastRatio(ink, garmentColor) < 1.6;
-  const label = style.technique === 'Bordado Alto Relieve' ? 'Hilo' : 'Tinta';
+  const label = style.technique === 'Bordado Alto Relieve' ? 'Hilo' : 'Color';
+  const chooseMode = (next: 'solid' | 'gradient') => {
+    setMode(next);
+    if (next === 'gradient' && !style.gradient) scheduleGradientActive({ from: ink, to: mix(ink, '#000000', 0.62), angle: 90 });
+    if (next === 'solid' && style.gradient) clearGradientActive();
+  };
 
   return (
     <Section title={label}>
       {style.mixedInk && (
         <p className="mb-4 text-[10.5px] font-light text-muted">{style.count} piezas con colores distintos: se aplicará a todas.</p>
       )}
+      <Segmented<'solid' | 'gradient'>
+        label="Tipo de color"
+        value={mode}
+        onChange={chooseMode}
+        className="mb-5"
+        options={[
+          { value: 'solid', label: 'Liso' },
+          { value: 'gradient', label: 'Degradado' },
+        ]}
+      />
+      {mode === 'gradient' ? (
+        <GradientEditor key={style.code} initial={style.gradient ?? { from: ink, to: mix(ink, '#000000', 0.62), angle: 90 }} />
+      ) : (
       <div
         onPointerDown={() => (interacting.current = true)}
         onPointerUp={() => (interacting.current = false)}
@@ -314,6 +340,7 @@ export function ElementInkPanel() {
       >
         <ColorField label="Color del elemento" color={ink} swatches={INK_SWATCHES} onChange={changeInk} />
       </div>
+      )}
       {lowContrast && (
         <p className="mt-3 font-editorial text-[13px] font-light text-muted italic">
           Contraste mínimo con el tejido: valore la técnica ton-sur-ton.

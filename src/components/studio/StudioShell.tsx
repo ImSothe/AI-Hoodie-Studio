@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useStudio } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import { Sidebar } from '../sidebar/Sidebar';
+import { PartsEditor } from './PartsEditor';
 
 // Three.js depende de WebGL/window: sólo se carga en el cliente.
 const HoodieViewer = dynamic(() => import('../three/HoodieViewer').then((m) => m.HoodieViewer), {
@@ -36,6 +37,7 @@ export function StudioShell() {
       >
         <Sidebar />
       </div>
+      <PartsEditor />
     </div>
   );
 }

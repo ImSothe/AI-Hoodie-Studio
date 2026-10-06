@@ -30,6 +30,7 @@ import {
   getDesignZoneRect,
   getPrintAreaRect,
   pxToCm,
+  type GradientSpec,
   type HoodieView,
   type Rect,
   type Technique,
@@ -65,6 +66,7 @@ type Tagged = FabricObject & {
   elementKind?: ElementKind;
   tonoShift?: TonalShift;
   hiloAcabado?: ThreadFinish;
+  gradient?: GradientSpec;
 };
 
 export type ElementKind = 'svg' | 'png' | 'text';
@@ -81,6 +83,7 @@ export const CUSTOM_PROPS = [
   'tonoShift',
   'hiloAcabado',
   'inkBeforeTonal',
+  'gradient',
 ];
 
 export const techniqueOfObject = (obj: FabricObject) => (obj as Tagged).tecnica ?? DEFAULT_TECHNIQUE;
@@ -562,6 +565,7 @@ function selectionStyle(canvas: Canvas, view: HoodieView) {
     fontFamily: single instanceof IText ? fontFamilyName(single) : null,
     tonoShift: shifts.length === 1 ? shifts[0] : null,
     hiloAcabado: finishes.length === 1 ? finishes[0] : null,
+    gradient: single?.gradient ?? null,
     tinted: objs.some((o) => o.inkColor && o.inkColor !== o.originalInk),
   };
 }

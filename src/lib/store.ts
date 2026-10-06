@@ -22,6 +22,9 @@ export type CameraPreset = 'front' | 'back' | 'right' | 'left' | 'detail';
 
 export type SidebarTab = 'design' | 'text' | 'garment' | 'element' | 'production';
 
+/** Forma de añadir un motivo en el paso Diseño. */
+export type DesignMode = 'images' | 'templates' | 'text' | 'ai';
+
 interface StudioState {
   activeView: HoodieView;
   sidebarTab: SidebarTab;
@@ -54,6 +57,14 @@ interface StudioState {
   immersive: boolean;
   /** Ambiente del escenario 3D del atelier: estudio oscuro (nuit) o sala clara (salon). */
   stageMood: StageMood;
+  /** Qué se está añadiendo en el paso Diseño (la barra «Añadir» del visor lo cambia). */
+  designMode: DesignMode;
+  /** Editor de partes abierto (separar alas, adornos… de una pieza). */
+  partsEditorOpen: boolean;
+  /** La prenda gira sola mientras no se edita nada (si no, queda fija). */
+  autoRotate: boolean;
+  /** Muestra cordones, cremalleras y puntadas del modelo (apagado = modelo limpio). */
+  showDetails: boolean;
   /** Captura del visor 3D para incluir en el Tech Pack. */
   snapshot3d: string | null;
 
@@ -81,6 +92,10 @@ interface StudioState {
   setHardware: (patch: Partial<HardwareSpec>) => void;
   setImmersive: (value: boolean) => void;
   setStageMood: (mood: StageMood) => void;
+  setDesignMode: (mode: DesignMode) => void;
+  setPartsEditorOpen: (open: boolean) => void;
+  setAutoRotate: (value: boolean) => void;
+  setShowDetails: (value: boolean) => void;
   setSnapshot3d: (dataUrl: string | null) => void;
 }
 
@@ -109,6 +124,10 @@ export const useStudio = create<StudioState>((set) => ({
   hardware: DEFAULT_HARDWARE,
   immersive: false,
   stageMood: 'nuit',
+  designMode: 'images',
+  partsEditorOpen: false,
+  autoRotate: false,
+  showDetails: false,
   snapshot3d: null,
 
   // Al cambiar de cara se limpia la selección (el lienzo oculto la descarta);
@@ -142,5 +161,9 @@ export const useStudio = create<StudioState>((set) => ({
   setHardware: (patch) => set((s) => ({ hardware: { ...s.hardware, ...patch } })),
   setImmersive: (immersive) => set((s) => (s.immersive === immersive ? {} : { immersive })),
   setStageMood: (stageMood) => set({ stageMood }),
+  setDesignMode: (designMode) => set({ designMode, sidebarTab: 'design' }),
+  setPartsEditorOpen: (partsEditorOpen) => set({ partsEditorOpen }),
+  setAutoRotate: (autoRotate) => set({ autoRotate }),
+  setShowDetails: (showDetails) => set({ showDetails }),
   setSnapshot3d: (snapshot3d) => set({ snapshot3d }),
 }));

@@ -8,6 +8,11 @@ import '@fontsource/bodoni-moda/400-italic.css';
 import '@fontsource/cormorant-garamond/300.css';
 import '@fontsource/cormorant-garamond/300-italic.css';
 import '@fontsource/ibm-plex-mono/300.css';
+import '@fontsource/inter/900.css';
+import '@fontsource/bodoni-moda/900.css';
+import '@fontsource/archivo-black/400.css';
+import '@fontsource/anton/400.css';
+import '@fontsource/playfair-display/900.css';
 import './globals.css';
 
 export const metadata: Metadata = {

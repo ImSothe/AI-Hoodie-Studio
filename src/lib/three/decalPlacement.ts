@@ -98,7 +98,7 @@ export function garmentMeshes(root: Object3D) {
   const meshes: Mesh[] = [];
   root.traverse((obj) => {
     const mesh = obj as Mesh;
-    if (!mesh.isMesh || !mesh.visible || !mesh.geometry.getAttribute('position')) return;
+    if (!mesh.isMesh || !mesh.geometry.getAttribute('position')) return;
     const size = new Box3().setFromObject(mesh).getSize(new Vector3());
     if (Math.max(size.x, size.y, size.z) >= reference * MIN_PANEL_RATIO) meshes.push(mesh);
   });

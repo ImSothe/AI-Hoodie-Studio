@@ -4,6 +4,7 @@ import { useRef, useState, type DragEvent } from 'react';
 import { Canvas, type RootState } from '@react-three/fiber';
 import { NeutralToneMapping } from 'three';
 import { useGLTF, useProgress } from '@react-three/drei';
+import { placeFiles } from '@/lib/assets/placeFiles';
 import { addAssetToCanvas } from '@/lib/fabric/editor';
 import { getCanvas } from '@/lib/fabric/registry';
 import { GARMENT, TECHNIQUE_INFO, VIEW_SPECS } from '@/lib/hoodie/spec';
@@ -56,10 +57,13 @@ export function HoodieViewer() {
   const garmentColor = useStudio((s) => s.garmentColor);
   const immersive = useStudio((s) => s.immersive);
   const stageMood = useStudio((s) => s.stageMood);
+  const autoRotate = useStudio((s) => s.autoRotate);
+  const showDetails = useStudio((s) => s.showDetails);
   const { requestCamera, focusView, setSnapshot3d } = useStudio.getState();
   const getThree = useRef<(() => RootState) | null>(null);
   const [flash, setFlash] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const desktop = useDesktop();
   const ready = status.state === 'ready';
   const techniques = [...new Set(elements.map((e) => TECHNIQUE_INFO[e.technique].short))].join(' · ');
@@ -88,6 +92,10 @@ export function HoodieViewer() {
   const onDrop = async (e: DragEvent) => {
     e.preventDefault();
     setDragOver(false);
+    if (e.dataTransfer.files.length) {
+      await placeFiles(e.dataTransfer.files);
+      return;
+    }
     const id = e.dataTransfer.getData(ASSET_DRAG_MIME);
     const { assets, activeView: view } = useStudio.getState();
     const asset = assets.find((a) => a.id === id);
@@ -103,7 +111,7 @@ export function HoodieViewer() {
       className="stage-bg relative h-full min-h-0"
       data-mood={stageMood}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(ASSET_DRAG_MIME)) return;
+        if (!e.dataTransfer.types.includes(ASSET_DRAG_MIME) && !e.dataTransfer.types.includes('Files')) return;
         e.preventDefault();
         setDragOver(true);
       }}
@@ -133,6 +141,44 @@ export function HoodieViewer() {
       </div>
 
       {ready && <SelectionFrame getThree={getThree} />}
+
+      {/* Añadir: siempre a la vista, sea cual sea el paso */}
+      {ready && (
+        <nav
+          aria-label="Añadir a la prenda"
+          className={cn('absolute bottom-24 left-6 z-10 flex flex-col gap-px md:top-1/2 md:bottom-auto md:left-[420px] md:-translate-y-1/2', chrome)}
+        >
+          <span className="label-tech mb-2">Añadir</span>
+          {(
+            [
+              ['Imagen', () => fileRef.current?.click()],
+              ['Plantilla', () => useStudio.getState().setDesignMode('templates')],
+              ['Texto', () => useStudio.getState().setDesignMode('text')],
+              ['IA', () => useStudio.getState().setDesignMode('ai')],
+            ] as const
+          ).map(([label, onClick]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={onClick}
+              className="border border-fg/20 bg-black/40 px-4 py-2.5 text-left text-[10px] tracking-[0.22em] text-fg uppercase backdrop-blur transition hover:border-fg/60 hover:bg-black/60"
+            >
+              + {label}
+            </button>
+          ))}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".svg,image/svg+xml,image/png,image/webp,image/jpeg"
+            multiple
+            hidden
+            onChange={async (e) => {
+              if (e.target.files?.length) await placeFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+        </nav>
+      )}
 
       {/* Cabecera editorial */}
       <header
@@ -176,6 +222,24 @@ export function HoodieViewer() {
               className="border border-fg/20 px-3 py-2 text-[10px] tracking-[0.22em] text-fg uppercase transition hover:border-fg/60"
             >
               {stageMood === 'nuit' ? 'Fondo claro' : 'Fondo oscuro'}
+            </button>
+            <button
+              type="button"
+              onClick={() => useStudio.getState().setAutoRotate(!autoRotate)}
+              aria-pressed={autoRotate}
+              title="La prenda gira sola mientras no edita nada"
+              className="border border-fg/20 px-3 py-2 text-[10px] tracking-[0.22em] text-fg uppercase transition hover:border-fg/60"
+            >
+              {autoRotate ? 'Girando' : 'Fija'}
+            </button>
+            <button
+              type="button"
+              onClick={() => useStudio.getState().setShowDetails(!showDetails)}
+              aria-pressed={showDetails}
+              title="Mostrar u ocultar cordones, cremalleras y puntadas del modelo"
+              className="border border-fg/20 px-3 py-2 text-[10px] tracking-[0.22em] text-fg uppercase transition hover:border-fg/60"
+            >
+              {showDetails ? 'Con detalles' : 'Modelo limpio'}
             </button>
             <CalibrationPanel />
             <button

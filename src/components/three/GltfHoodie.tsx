@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
-import { Box3, MeshPhysicalMaterial, Vector3, type Color, type Material, type Mesh, type MeshStandardMaterial } from 'three';
+import { Box3, MeshPhysicalMaterial, Vector3, type Color, type Material, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
 import { TEXTURE_LAYERS } from '@/lib/fabric/registry';
 import { HOODIE_VIEWS } from '@/lib/hoodie/spec';
 import { useStudio } from '@/lib/store';
 import { useCalibration } from '@/lib/three/calibration';
-import { buildDecalPatches, computeProjector } from '@/lib/three/decalPlacement';
+import { buildDecalPatches, computeProjector, garmentMeshes } from '@/lib/three/decalPlacement';
 import { fabricAlbedo } from '@/lib/three/fabricShading';
 import { setGarmentRoot } from '@/lib/three/garmentRegistry';
 import { knitNormalMap } from '@/lib/three/fabricTexture';
@@ -29,6 +29,7 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
   const scale = useCalibration((s) => s.scale);
   const debug = useCalibration((s) => s.debug);
   const layerCounts = useStudio((s) => s.layerCounts);
+  const showDetails = useStudio((s) => s.showDetails);
 
   const { root, materials } = useMemo(() => {
     const root = scene.clone(true);
@@ -94,6 +95,14 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
     setGarmentRoot(root);
     return () => setGarmentRoot(null);
   }, [root]);
+
+  // Modelo limpio: sólo los paneles del tejido. Cordones, cremalleras y puntadas se muestran a petición.
+  useEffect(() => {
+    const panels = new Set<Object3D>(garmentMeshes(root));
+    root.traverse((obj) => {
+      if ((obj as Mesh).isMesh && !panels.has(obj)) obj.visible = showDetails;
+    });
+  }, [root, showDetails]);
 
   // Un proyector por cara y un parche de decal por panel del tejido.
   const projections = useMemo(

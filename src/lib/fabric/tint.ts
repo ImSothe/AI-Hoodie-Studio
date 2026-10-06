@@ -5,6 +5,7 @@ import { mix } from '../color';
 import {
   TONAL_SHIFTS,
   TONAL_TECHNIQUE,
+  type GradientSpec,
   type Technique,
   type ThreadFinish,
   type TonalShift,
@@ -27,6 +28,8 @@ export type Styled = FabricObject & {
   /** Ton-sur-ton: matiz respecto al tejido y acabado del hilo. */
   tonoShift?: TonalShift;
   hiloAcabado?: ThreadFinish;
+  /** Degradado aplicado a la pieza (la imagen se ha pintado con él). */
+  gradient?: GradientSpec;
   /** Tinta que tenía antes de pasar a ton-sur-ton (para recuperarla al salir). */
   inkBeforeTonal?: string | null;
 };
@@ -37,6 +40,9 @@ export function tonalInk(garmentHex: string, shift: TonalShift = 'exact') {
   if (!amount) return garmentHex.toUpperCase();
   return mix(garmentHex, amount > 0 ? '#FFFFFF' : '#000000', Math.abs(amount));
 }
+
+/** Imagen original de las piezas con degradado, para volver a los colores de origen. */
+export const gradientBase = new WeakMap<FabricObject, CanvasImageSource>();
 
 type Paint = FabricObject['fill'];
 
@@ -60,6 +66,7 @@ function markDirty(obj: FabricObject) {
 }
 
 export function tintObject(obj: Styled, hex: string) {
+  (obj as Styled).gradient = undefined;
   if (obj instanceof FabricImage) {
     obj.filters = [new filters.BlendColor({ color: hex, mode: 'tint', alpha: 1 })];
     obj.applyFilters();
@@ -79,6 +86,12 @@ export function tintObject(obj: Styled, hex: string) {
 /** Quita el tinte: filtros fuera (PNG) o fills/strokes originales (SVG). */
 export function restoreObject(obj: Styled, fallbackInk?: string) {
   if (obj instanceof FabricImage) {
+    const base = gradientBase.get(obj);
+    if (base) {
+      obj.setElement(base as HTMLImageElement);
+      gradientBase.delete(obj);
+      (obj as Styled).gradient = undefined;
+    }
     obj.filters = [];
     obj.applyFilters();
   } else {
