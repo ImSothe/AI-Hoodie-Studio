@@ -33,13 +33,22 @@ export function Sidebar() {
           <h1 className="text-[11px] font-normal tracking-[0.42em] whitespace-nowrap text-fg uppercase">AI Hoodie Studio</h1>
           <p className="mt-1.5 font-editorial text-[15px] font-light text-muted italic">Atelier numérique — {season}</p>
         </div>
-        <Link
-          href="/configurador"
-          title="Configurador de taller: tejido, personalización, tallas y orden"
-          className="border-b border-muted pb-0.5 text-[9px] tracking-[0.22em] whitespace-nowrap text-muted uppercase hover:text-fg"
-        >
-          Configurador
-        </Link>
+        <div className="flex flex-col items-end gap-2">
+          <Link
+            href="/configurador"
+            title="Configurador de taller: tejido, personalización, tallas y orden"
+            className="border-b border-muted pb-0.5 text-[9px] tracking-[0.22em] whitespace-nowrap text-muted uppercase hover:text-fg"
+          >
+            Configurador
+          </Link>
+          <Link
+            href="/ayuda"
+            title="Manual de usuario: cómo diseñar y enviar el dossier a fábrica"
+            className="border-b border-muted pb-0.5 text-[9px] tracking-[0.22em] whitespace-nowrap text-muted uppercase hover:text-fg"
+          >
+            Ayuda
+          </Link>
+        </div>
       </div>
 
       {/* Pasos + lienzo 2D plegable: quedan fijos arriba mientras se hace scroll del contenido */}

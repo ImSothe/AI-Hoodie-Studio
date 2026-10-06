@@ -28,6 +28,8 @@ Atelier digital de **lujo silencioso** para diseñar sudaderas con IA y compilar
 5. **Tratar una zona aparte** (por ejemplo las alas de un dragón): botón **Partes** → pintar la zona → «Separar parte». Cada parte tiene su propio color, degradado y acabado.
 6. **Entregar** (paso 4): dossier PDF de taller y archivos por técnica.
 
+**Manual de usuario completo:** [docs/MANUAL-USUARIO.md](docs/MANUAL-USUARIO.md), también dentro de la app en `/ayuda` (enlace «Ayuda» en el panel).
+
 En el visor: *Fondo claro/oscuro*, *Fija/Girando* (la prenda gira sola mientras no se edita), *Modelo limpio/Con detalles* (cordones, cremalleras y puntadas del GLB) y *Calibrar* (ajustar el modelo a la escala real).
 
 ## Stack
