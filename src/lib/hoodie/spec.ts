@@ -77,6 +77,16 @@ export function getPrintAreaRect(view: HoodieView): Rect {
   };
 }
 
+/**
+ * Zona de diseño: TODA la pieza (cuerpo, mangas y capucha). Es la región del
+ * lienzo que se vuelca a la textura 3D y se proyecta sobre el modelo. El área
+ * de impresión de arriba es sólo la zona recomendada del cuerpo (guía y cotas
+ * del dossier); un gráfico puede salirse de ella y cruzar costuras y mangas.
+ */
+export function getDesignZoneRect(_view?: HoodieView): Rect {
+  return { left: 0, top: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT };
+}
+
 export const pxToCm = (px: number) => px / PX_PER_CM;
 export const cmToPx = (cm: number) => cm * PX_PER_CM;
 

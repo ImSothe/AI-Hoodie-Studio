@@ -4,7 +4,7 @@ import type { Canvas, FabricObject } from 'fabric';
 import {
   THREAD_FINISHES,
   TONAL_TECHNIQUE,
-  getPrintAreaRect,
+  getDesignZoneRect,
   type ThreadFinish,
   type HoodieView,
   type Rect,
@@ -55,7 +55,7 @@ export function renderRegion(
 }
 
 /**
- * Repinta el canvas-textura de una capa con el área de impresión actual.
+ * Repinta el canvas-textura de una capa con la zona de diseño (toda la pieza).
  * Cada capa sólo contiene los elementos de su técnica (serigrafía plana,
  * reflectante o bordado), así cada <Decal> 3D lleva su propio material.
  */
@@ -70,7 +70,7 @@ export function paintPrintTexture(view: HoodieView, layer: TextureLayer = 'print
   const filter = (o: FabricObject) => isDesign(o) && layerOfObject(o) === layer;
   if (!canvas.getObjects().some(filter)) return target; // capa vacía: nada que renderizar
 
-  const pa = getPrintAreaRect(view);
+  const pa = getDesignZoneRect(view);
   const rendered = renderRegion(canvas, pa, target.width / pa.width, { filter });
   ctx.drawImage(rendered, 0, 0, target.width, target.height);
   return target;
@@ -102,7 +102,7 @@ function stitchPattern() {
 function silhouette(view: HoodieView, filter: (o: FabricObject) => boolean, color: string, w: number, h: number) {
   const canvas = getCanvas(view);
   if (!canvas || !canvas.getObjects().some(filter)) return null;
-  const pa = getPrintAreaRect(view);
+  const pa = getDesignZoneRect(view);
   const out = document.createElement('canvas');
   out.width = w;
   out.height = h;

@@ -1,13 +1,13 @@
 'use client';
 
 import type { Canvas } from 'fabric';
-import { VIEW_SPECS, type HoodieView, type TechniqueLayer } from '../hoodie/spec';
+import { getDesignZoneRect, type HoodieView, type TechniqueLayer } from '../hoodie/spec';
 
 /**
  * Puente entre Fabric (2D) y Three (3D).
  *
  * Cada vista tiene su lienzo de Fabric y un <canvas> "de textura" estable que
- * contiene sólo el área de impresión con los gráficos (fondo transparente).
+ * contiene la zona de diseño (toda la pieza) con los gráficos (fondo transparente).
  * Three.js crea una CanvasTexture sobre ese elemento y sólo necesita marcar
  * `needsUpdate` cuando se le avisa de que el diseño ha cambiado.
  */
@@ -17,7 +17,7 @@ const textureCanvases = new Map<string, HTMLCanvasElement>();
 const listeners = new Set<(view: HoodieView) => void>();
 
 /** Lado largo de la textura que se envía a la GPU. */
-export const TEXTURE_LONG_SIDE = 1024;
+export const TEXTURE_LONG_SIDE = 1536;
 
 export function registerCanvas(view: HoodieView, canvas: Canvas) {
   canvases.set(view, canvas);
@@ -44,8 +44,8 @@ export function getTextureCanvas(view: HoodieView, layer: TextureLayer | 'bump' 
   const key = `${view}:${layer}`;
   let el = textureCanvases.get(key);
   if (!el) {
-    const { widthCm, heightCm } = VIEW_SPECS[view].printArea;
-    const ratio = heightCm / widthCm;
+    const zone = getDesignZoneRect(view);
+    const ratio = zone.height / zone.width;
     el = document.createElement('canvas');
     if (ratio >= 1) {
       el.height = TEXTURE_LONG_SIDE;

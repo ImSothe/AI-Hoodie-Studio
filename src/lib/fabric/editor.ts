@@ -27,6 +27,7 @@ import {
   fontOption,
   VIEW_SPECS,
   cmToPx,
+  getDesignZoneRect,
   getPrintAreaRect,
   pxToCm,
   type HoodieView,
@@ -170,7 +171,7 @@ function createGuides(view: HoodieView) {
     strokeUniform: true,
   });
 
-  const label = new FabricText(`ÁREA DE IMPRESIÓN   ${widthCm * 10} × ${heightCm * 10} MM`, {
+  const label = new FabricText(`ZONA RECOMENDADA   ${widthCm * 10} × ${heightCm * 10} MM`, {
     ...common,
     originX: 'left',
     originY: 'bottom',
@@ -330,8 +331,10 @@ export async function addAssetToCanvas(
   const fit = Math.min((pa.width * 0.7) / obj.width, (pa.height * 0.7) / obj.height);
   obj.set({ scaleX: fit, scaleY: fit, originX: 'center', originY: 'center' });
 
-  const x = dropPoint ? clamp(dropPoint.x, pa.left, pa.left + pa.width) : CENTER_X;
-  const y = dropPoint ? clamp(dropPoint.y, pa.top, pa.top + pa.height) : pa.top + pa.height / 2;
+  // Se puede soltar en cualquier punto de la pieza (mangas y capucha incluidas).
+  const zone = getDesignZoneRect(view);
+  const x = dropPoint ? clamp(dropPoint.x, zone.left, zone.left + zone.width) : CENTER_X;
+  const y = dropPoint ? clamp(dropPoint.y, zone.top, zone.top + zone.height) : pa.top + pa.height / 2;
   obj.setPositionByOrigin(new Point(x, y), 'center', 'center');
 
   tag(obj, 'design', {

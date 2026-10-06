@@ -1,11 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
-import { createPortal } from '@react-three/fiber';
-import { Decal } from '@react-three/drei';
 import type { Texture } from 'three';
 import type { TextureLayer } from '@/lib/fabric/registry';
-import type { DecalPlacement } from '@/lib/three/decalPlacement';
+import type { DecalPatch } from '@/lib/three/decalPlacement';
 import { useReflectionEnv } from './useReflectionEnv';
 import { fabricAlbedo } from '@/lib/three/fabricShading';
 
@@ -38,11 +35,12 @@ const EMBROIDERY = {
 } as const;
 
 /**
- * Estampa la textura del lienzo Fabric sobre la malla con <Decal> de drei.
+ * Estampa la textura del lienzo Fabric sobre los paneles de la prenda con los
+ * parches de DecalGeometry del proyector global (uno por panel, misma
+ * proyección: el gráfico cruza las costuras). La textura no usa las UVs del modelo.
  *
- * <Decal> construye la geometría en el espacio local de la malla, así que se
- * monta DENTRO de ella con createPortal: hereda su transformación sea cual
- * sea la jerarquía del GLB. La textura no usa las UVs del modelo.
+ * Los parches ya vienen en coordenadas de mundo: cada malla se monta con su
+ * matriz fija en identidad para que no herede transformaciones del padre.
  *
  * Un decal por técnica de aplicación:
  * - print → MeshStandardMaterial mate (serigrafía plana).
@@ -51,54 +49,53 @@ const EMBROIDERY = {
  * - embroidery → MeshPhysicalMaterial con sheen de hilo y bumpMap de relieve.
  */
 export function PrintDecal({
-  placement,
+  patches,
   texture,
   bumpMap,
   roughnessMap,
   finish,
   debug,
 }: {
-  placement: DecalPlacement;
+  patches: DecalPatch[];
   texture: Texture;
   bumpMap?: Texture;
   roughnessMap?: Texture;
   finish: TextureLayer;
   debug?: boolean;
 }) {
-  const meshRef = useMemo(() => ({ current: placement.mesh }), [placement.mesh]);
   const envMap = useReflectionEnv();
   const offset = finish === 'embroidery' ? POLYGON_OFFSET - 4 : POLYGON_OFFSET;
   const common = {
     ...fabricAlbedo,
     map: texture,
     transparent: true,
+    // depthTest activo: la estampa de la espalda no se ve a través del cuerpo.
     depthTest: true,
     depthWrite: false,
     polygonOffset: true,
     polygonOffsetFactor: offset,
+    wireframe: debug,
   };
 
-  return createPortal(
-    <Decal
-      mesh={meshRef}
-      position={placement.position}
-      rotation={placement.rotation}
-      scale={placement.scale}
-      map={texture}
-      // depthTest activo: la estampa de la espalda no se ve a través del cuerpo.
-      depthTest
-      polygonOffsetFactor={offset}
-      debug={debug}
-      renderOrder={{ print: 2, reflective: 3, embroidery: 4 }[finish]}
-    >
-      {finish === 'reflective' ? (
-        <meshPhysicalMaterial {...common} {...REFLECTIVE} emissiveMap={texture} envMap={envMap} />
-      ) : finish === 'embroidery' ? (
-        <meshPhysicalMaterial {...common} {...EMBROIDERY} bumpMap={bumpMap} roughnessMap={roughnessMap} />
-      ) : (
-        <meshStandardMaterial {...common} roughness={0.88} metalness={0} />
-      )}
-    </Decal>,
-    placement.mesh,
+  return (
+    <>
+      {patches.map((patch, i) => (
+        <mesh
+          key={`${patch.mesh.uuid}:${i}`}
+          geometry={patch.geometry}
+          matrixAutoUpdate={false}
+          matrixWorldAutoUpdate={false}
+          renderOrder={{ print: 2, reflective: 3, embroidery: 4 }[finish]}
+        >
+          {finish === 'reflective' ? (
+            <meshPhysicalMaterial {...common} {...REFLECTIVE} emissiveMap={texture} envMap={envMap} />
+          ) : finish === 'embroidery' ? (
+            <meshPhysicalMaterial {...common} {...EMBROIDERY} bumpMap={bumpMap} roughnessMap={roughnessMap} />
+          ) : (
+            <meshStandardMaterial {...common} roughness={0.88} metalness={0} />
+          )}
+        </mesh>
+      ))}
+    </>
   );
 }

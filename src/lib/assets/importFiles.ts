@@ -1,5 +1,6 @@
 'use client';
 
+import { removeFakeCheckerboard } from '../image/fakeTransparency';
 import { sanitizeSvg, svgToDataUrl } from '../svg/sanitize';
 import type { GeneratedAsset } from '../types';
 
@@ -31,7 +32,10 @@ export async function importFiles(files: FileList | File[]): Promise<GeneratedAs
       const svg = sanitizeSvg(await readAs(file, 'text'));
       out.push({ ...base, kind: 'svg', svg, src: svgToDataUrl(svg) });
     } else if (RASTER_TYPES.includes(file.type)) {
-      out.push({ ...base, kind: 'png', src: await readAs(file, 'dataUrl') });
+      const original = await readAs(file, 'dataUrl');
+      // Si la imagen trae el damero de transparencia pintado, se convierte en alfa real.
+      const clean = await removeFakeCheckerboard(original).catch(() => null);
+      out.push({ ...base, kind: 'png', src: clean ?? original });
     }
   }
   return out;

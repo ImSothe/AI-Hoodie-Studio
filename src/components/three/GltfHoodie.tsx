@@ -7,7 +7,7 @@ import { TEXTURE_LAYERS } from '@/lib/fabric/registry';
 import { HOODIE_VIEWS } from '@/lib/hoodie/spec';
 import { useStudio } from '@/lib/store';
 import { useCalibration } from '@/lib/three/calibration';
-import { computeDecalPlacement } from '@/lib/three/decalPlacement';
+import { buildDecalPatches, computeProjector } from '@/lib/three/decalPlacement';
 import { fabricAlbedo } from '@/lib/three/fabricShading';
 import { knitNormalMap } from '@/lib/three/fabricTexture';
 import { FABRIC_MATERIAL, GLB_RECOLOR, GLB_TARGET_HEIGHT, HEM_Y, MODEL_HPS_Y } from '@/lib/three/modelConfig';
@@ -88,16 +88,21 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
     });
   }, [materials]);
 
-  const placements = useMemo(
+  // Un proyector por cara y un parche de decal por panel del tejido.
+  const projections = useMemo(
     () =>
-      HOODIE_VIEWS.map((view) => {
-        const p = computeDecalPlacement(root, view, { hpsY: MODEL_HPS_Y, scale, offsetYCm });
-        if (!p) console.warn(`[hoodie] No se encontró superficie para la cara "${view}". Revisa la calibración.`);
-        return p;
-      }).filter((p) => p !== null),
+      HOODIE_VIEWS.flatMap((view) => {
+        const projector = computeProjector(root, view, { hpsY: MODEL_HPS_Y, scale, offsetYCm });
+        if (!projector) {
+          console.warn(`[hoodie] No se encontró tejido para la cara "${view}". Revisa la calibración.`);
+          return [];
+        }
+        return [{ view, patches: buildDecalPatches(projector) }];
+      }),
     [root, scale, offsetYCm],
   );
 
+  useEffect(() => () => projections.forEach((p) => p.patches.forEach((patch) => patch.geometry.dispose())), [projections]);
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
 
   return (
@@ -105,22 +110,20 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
       <primitive object={root} />
       <Hardware root={root} />
       {textures &&
-        placements.flatMap((p) => {
-          // La key incluye la malla: si cambia (p. ej. al rotar el modelo) el portal se remonta en la nueva.
-          const key = `${p.view}:${p.mesh.uuid}`;
-          // Un <Decal> por técnica, montado sólo si esa cara tiene elementos con ella.
-          return TEXTURE_LAYERS.filter((layer) => layerCounts[p.view][layer] > 0).map((layer, i) => (
+        projections.flatMap(({ view, patches }) =>
+          // Un decal por técnica, montado sólo si esa cara tiene elementos con ella.
+          TEXTURE_LAYERS.filter((layer) => layerCounts[view][layer] > 0).map((layer, i) => (
             <PrintDecal
-              key={`${key}:${layer}`}
-              placement={p}
-              texture={textures[p.view][layer]}
-              bumpMap={layer === 'embroidery' ? textures[p.view].bump : undefined}
-              roughnessMap={layer === 'embroidery' ? textures[p.view].rough : undefined}
+              key={`${view}:${layer}`}
+              patches={patches}
+              texture={textures[view][layer]}
+              bumpMap={layer === 'embroidery' ? textures[view].bump : undefined}
+              roughnessMap={layer === 'embroidery' ? textures[view].rough : undefined}
               finish={layer}
               debug={debug && i === 0}
             />
-          ));
-        })}
+          )),
+        )}
     </>
   );
 }
