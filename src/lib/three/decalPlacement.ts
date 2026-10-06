@@ -28,8 +28,6 @@ export const PRINT_MIN_FACING = 0.4;
 const KEEP_FACING = 0.25;
 /** Un panel cuenta como tejido si su mayor dimensión es al menos este % de la del modelo. */
 const MIN_PANEL_RATIO = 0.2;
-/** Un panel que empieza por encima de HPS - este margen (m) no es cuerpo ni manga: es la capucha. */
-const HOOD_MIN_BELOW_HPS_M = 0.18;
 /** Una malla es "principal" si mide al menos este % de la altura del modelo. */
 const MIN_HEIGHT_RATIO = 0.3;
 
@@ -46,8 +44,6 @@ export interface DecalProjector {
    * de él y el frente por delante, así un diseño nunca pasa al otro lado.
    */
   zMid: number;
-  /** Zona de la capucha (cualquier panel): ahí no se estampa; el cuerpo queda cubierto por ella. */
-  hood: Box3 | null;
 }
 
 /** Parche de decal ya recortado sobre un panel, en coordenadas de mundo. */
@@ -105,9 +101,6 @@ export function surfaceHit(root: Object3D, x: number, y: number, side: HoodieVie
   return { point: hit.point.clone(), normal };
 }
 
-/** Un panel que empieza por encima de HPS - este margen (m) no es cuerpo ni manga: es la capucha. */
-export const isHoodMesh = (m: Mesh, hpsY: number) => new Box3().setFromObject(m).min.y >= hpsY - HOOD_MIN_BELOW_HPS_M;
-
 /** Paneles del tejido: las mallas grandes (se descartan cordones, puntadas, botones...). */
 export function garmentMeshes(root: Object3D) {
   const modelBox = new Box3().setFromObject(root);
@@ -127,20 +120,9 @@ export function garmentMeshes(root: Object3D) {
  * Proyector de una cara: cubre toda la zona de diseño del lienzo (7 px = 1 cm,
  * con la escala de calibración) y el grosor entero de la prenda.
  */
-export function computeProjector(
-  root: Object3D,
-  view: HoodieView,
-  { hpsY, scale, offsetYCm }: PlacementOptions,
-): DecalProjector | null {
+export function computeProjector(root: Object3D, view: HoodieView, { hpsY, scale, offsetYCm }: PlacementOptions): DecalProjector | null {
   root.updateMatrixWorld(true);
-  const all = garmentMeshes(root);
-  // La capucha cae por encima del cuerpo: el estampado va sobre el cuerpo y las mangas, nunca sobre ella.
-  const isBody = (m: Mesh) => !isHoodMesh(m, hpsY);
-  const body = all.filter(isBody);
-  const meshes = body;
-  const hoodMeshes = all.filter((m) => !isBody(m));
-  const hood = hoodMeshes.length ? new Box3() : null;
-  hoodMeshes.forEach((m) => hood?.expandByObject(m));
+  const meshes = garmentMeshes(root);
   if (!meshes.length) return null;
 
   const zone = getDesignZoneRect(view);
@@ -155,7 +137,7 @@ export function computeProjector(
   const v = new Vector3();
   let sum = 0;
   let count = 0;
-  for (const mesh of body) {
+  for (const mesh of meshes) {
     const pos = mesh.geometry.getAttribute('position');
     const step = Math.max(1, Math.floor(pos.count / 4000));
     for (let i = 0; i < pos.count; i += step) {
@@ -167,7 +149,6 @@ export function computeProjector(
   return {
     view,
     meshes,
-    hood,
     zMid: count ? sum / count : (box.max.z + box.min.z) / 2,
     position: new Vector3(0, centerY, (box.max.z + box.min.z) / 2),
     // De espalda el proyector gira 180° para que el gráfico se lea sin espejo.
@@ -186,7 +167,6 @@ export function buildDecalPatches(projector: DecalProjector): DecalPatch[] {
   const c = new Vector3();
   const n = new Vector3();
 
-  const hood = projector.hood;
   for (const mesh of projector.meshes) {
     mesh.updateWorldMatrix(true, false);
     const raw = new DecalGeometry(mesh, projector.position, projector.rotation, projector.size);
@@ -220,14 +200,6 @@ export function buildDecalPatches(projector: DecalProjector): DecalPatch[] {
         bestSide = Math.max(bestSide, (pos.getZ(i + k) - projector.zMid) * side);
       }
       if (bestFacing < KEEP_FACING || bestSide < 0) continue;
-      if (hood) {
-        a.fromBufferAttribute(pos, i);
-        b.fromBufferAttribute(pos, i + 1);
-        c.fromBufferAttribute(pos, i + 2);
-        const cx = (a.x + b.x + c.x) / 3;
-        const cy = (a.y + b.y + c.y) / 3;
-        if (cx > hood.min.x && cx < hood.max.x && cy > hood.min.y) continue;
-      }
       for (let k = 0; k < 3; k++) {
         keptPos.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
         keptUv.push(uv.getX(i + k), uv.getY(i + k));
