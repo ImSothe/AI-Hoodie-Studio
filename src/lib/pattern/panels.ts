@@ -1,4 +1,4 @@
-import { Box3, Vector3, type Mesh, type Object3D } from 'three';
+import { Box3, Matrix3, Raycaster, Vector3, type Mesh, type Object3D } from 'three';
 import { uvToPx } from './layout';
 
 /** Una pieza plana del patrón (una «isla» de la malla): sus triángulos y cómo se llama. */
@@ -26,7 +26,7 @@ export function fabricPanels(root: Object3D): Mesh[] {
 }
 
 /** Separa una malla en sus piezas planas: los triángulos que comparten vértices forman una pieza. */
-function islandsOf(mesh: Mesh): number[][] {
+export function islandsOf(mesh: Mesh): number[][] {
   const geo = mesh.geometry;
   const index = geo.getIndex();
   if (!index) return [Array.from({ length: geo.getAttribute('position').count }, (_, i) => i)];
@@ -70,6 +70,87 @@ export const PIECE_LABELS: { label: string; x: number; y: number }[] = [
   { label: 'Puño', x: 257, y: 138 },
   { label: 'Puño', x: 1543, y: 170 },
 ];
+
+/**
+ * Marca por vértice qué tela es la cara EXTERIOR (1) y cuál el forro (0). Las dos capas
+ * (p. ej. capucha por fuera y forro por dentro) comparten hueco en el patrón; sin esto el
+ * dibujo saldría también por dentro. De las piezas que se solapan en el plano, la exterior
+ * es la que queda más lejos del centro del conjunto.
+ */
+export function outerMasks(root: Object3D): Map<Mesh, Float32Array> {
+  root.updateMatrixWorld(true);
+  interface Island {
+    mesh: Mesh;
+    verts: number[];
+    uv: [number, number, number, number]; // x0, y0, x1, y1 en el lienzo
+    pts: Vector3[];
+  }
+  const islands: Island[] = [];
+  const masks = new Map<Mesh, Float32Array>();
+  for (const mesh of fabricPanels(root)) {
+    const pos = mesh.geometry.getAttribute('position');
+    const uv = mesh.geometry.getAttribute('uv');
+    masks.set(mesh, new Float32Array(pos.count).fill(1));
+    for (const tri of islandsOf(mesh)) {
+      const verts = [...new Set(tri)];
+      const uvBox: Island['uv'] = [1e9, 1e9, -1e9, -1e9];
+      const pts = verts.map((vi) => {
+        const [x, y] = uvToPx(uv.getX(vi), uv.getY(vi));
+        uvBox[0] = Math.min(uvBox[0], x);
+        uvBox[1] = Math.min(uvBox[1], y);
+        uvBox[2] = Math.max(uvBox[2], x);
+        uvBox[3] = Math.max(uvBox[3], y);
+        return new Vector3().fromBufferAttribute(pos, vi).applyMatrix4(mesh.matrixWorld);
+      });
+      islands.push({ mesh, verts, uv: uvBox, pts });
+    }
+  }
+  // Cada pieza de tela viene duplicada (capa exterior y forro, casi pegadas): mismas UV y mismo número
+  // de vértices. Cada capa mira hacia su lado: la exterior mira al mundo (un rayo en esa dirección
+  // sale libre) y el forro mira a la cavidad de la prenda (el rayo choca con la tela del otro lado).
+  const panelMeshes = [...masks.keys()];
+  const raycaster = new Raycaster();
+  raycaster.far = 3;
+  const origin = new Vector3();
+  const dir = new Vector3();
+  const normalOf = new Matrix3();
+  const escape = (i: Island) => {
+    const normal = i.mesh.geometry.getAttribute('normal');
+    if (!normal) return 0.5;
+    normalOf.getNormalMatrix(i.mesh.matrixWorld);
+    const samples = 6;
+    let free = 0;
+    for (let k = 0; k < samples; k++) {
+      const idx = Math.floor((k + 0.5) * (i.verts.length / samples));
+      const vi = i.verts[idx];
+      dir.fromBufferAttribute(normal, vi).applyMatrix3(normalOf).normalize();
+      origin.copy(i.pts[idx]).addScaledVector(dir, 0.003);
+      raycaster.set(origin, dir);
+      if (raycaster.intersectObjects(panelMeshes, false).length === 0) free++;
+    }
+    return free / samples;
+  };
+  const same = (p: Island, q: Island) =>
+    p !== q &&
+    p.verts.length === q.verts.length &&
+    p.uv.every((value, k) => Math.abs(value - q.uv[k]) < 3);
+  const seen = new Set<Island>();
+  for (const first of islands) {
+    if (seen.has(first)) continue;
+    const group = islands.filter((q) => q === first || same(first, q));
+    group.forEach((g) => seen.add(g));
+    if (group.length < 2) continue;
+    const d = group.map(escape);
+    const best = Math.max(...d);
+    if (d.every((v) => v === best)) continue; // no se distinguen: se dejan las dos
+    group.forEach((g, i) => {
+      if (d[i] >= best) return;
+      const mask = masks.get(g.mesh)!;
+      for (const vi of g.verts) mask[vi] = 0;
+    });
+  }
+  return masks;
+}
 
 /** Lista las piezas planas con su nombre y su centro sobre el lienzo del patrón. */
 export function describePanels(root: Object3D): PatternPanel[] {

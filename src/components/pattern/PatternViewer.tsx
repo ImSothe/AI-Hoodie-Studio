@@ -3,9 +3,9 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
-import { Box3, MeshPhysicalMaterial, NeutralToneMapping, Vector3, type Mesh } from 'three';
+import { Box3, BufferAttribute, MeshPhysicalMaterial, NeutralToneMapping, Vector3, type Mesh } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { fabricPanels, describePanels, type PatternPanel } from '@/lib/pattern/panels';
+import { fabricPanels, describePanels, outerMasks, type PatternPanel } from '@/lib/pattern/panels';
 import { getPrintTexture } from '@/lib/pattern/print';
 import { useCalibration } from '@/lib/three/calibration';
 import { knitNormalMap } from '@/lib/three/fabricTexture';
@@ -33,6 +33,7 @@ function PatternGarment({ color, onPanels }: { color: string; onPanels: (p: Patt
     const texture = getPrintTexture();
     const panels = new Set<Mesh>(fabricPanels(root));
     const materials: MeshPhysicalMaterial[] = [];
+    const masks = outerMasks(root);
     root.traverse((obj) => {
       const mesh = obj as Mesh;
       if (!mesh.isMesh) return;
@@ -40,19 +41,27 @@ function PatternGarment({ color, onPanels }: { color: string; onPanels: (p: Patt
         mesh.visible = false; // cordones, cremalleras y puntadas: fuera
         return;
       }
+      // Geometría propia (la del GLB está en caché) con la marca exterior/forro por vértice.
+      mesh.geometry = mesh.geometry.clone();
+      mesh.geometry.setAttribute('printMask', new BufferAttribute(masks.get(mesh) ?? new Float32Array(mesh.geometry.getAttribute('position').count).fill(1), 1));
       const mat = new MeshPhysicalMaterial({ ...FABRIC_MATERIAL });
       mat.map = texture;
       mat.normalMap = knitNormalMap();
       mat.normalScale.set(0.24, 0.24);
       // El mapa no multiplica el color de la tela: la estampa se pinta encima, con su transparencia.
       mat.onBeforeCompile = (shader) => {
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <map_fragment>',
-          `#ifdef USE_MAP
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', ['#include <common>', 'attribute float printMask;', 'varying float vPrintMask;'].join('\n'))
+          .replace('#include <begin_vertex>', ['#include <begin_vertex>', 'vPrintMask = printMask;'].join('\n'));
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', ['#include <common>', 'varying float vPrintMask;'].join('\n'))
+          .replace(
+            '#include <map_fragment>',
+            `#ifdef USE_MAP
   vec4 printColor = texture2D( map, vMapUv );
-  diffuseColor.rgb = mix( diffuseColor.rgb, printColor.rgb, printColor.a );
+  diffuseColor.rgb = mix( diffuseColor.rgb, printColor.rgb, printColor.a * vPrintMask );
 #endif`,
-        );
+          );
       };
       mat.customProgramCacheKey = () => 'pattern-print';
       mesh.material = mat;
