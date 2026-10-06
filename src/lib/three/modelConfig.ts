@@ -40,7 +40,13 @@ export const FABRIC_MATERIAL = {
  */
 export const BODY_Z_UNDER_HOOD: [number, number] = [-0.105, 0.125];
 
-/** Levantar capucha: bisagra en el cuello (z de mundo), giro hacia atrás y subida (m). */
-export const HOOD_PIVOT_Z = -0.05;
-export const HOOD_TILT_RAD = (10 * Math.PI) / 180;
-export const HOOD_LIFT_M = 0.15;
+/**
+ * Colgar de la percha: la capucha se estira hacia arriba y se aplana en una lámina
+ * detrás de los hombros. Ensanche relativo, estiramiento vertical relativo, subida (m),
+ * z de mundo de la lámina (m) y cuánto se aplana (0 = nada, 1 = del todo).
+ */
+export const HANG_WIDEN = 0.3;
+export const HANG_STRETCH_Y = 0.08;
+export const HANG_LIFT_M = 0.07;
+export const HANG_Z = -0.125;
+export const HANG_FLATTEN = 0.9;

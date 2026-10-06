@@ -271,10 +271,10 @@ export function HoodieViewer() {
               type="button"
               onClick={() => useStudio.getState().setHoodUp(!hoodUp)}
               aria-pressed={hoodUp}
-              title="Levanta la capucha para ver el cuerpo de la prenda debajo"
+              title="Cuelga la prenda por la capucha: queda estirada y plana para dibujar sobre ella"
               className="border border-fg/20 px-3 py-2 text-[10px] tracking-[0.22em] text-fg uppercase transition hover:border-fg/60"
             >
-              {hoodUp ? 'Bajar capucha' : 'Levantar capucha'}
+              {hoodUp ? 'Bajar capucha' : 'Colgar de la capucha'}
             </button>
             <CalibrationPanel />
             <button

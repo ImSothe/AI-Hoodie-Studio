@@ -127,13 +127,20 @@ export function garmentMeshes(root: Object3D) {
  * Proyector de una cara: cubre toda la zona de diseño del lienzo (7 px = 1 cm,
  * con la escala de calibración) y el grosor entero de la prenda.
  */
-export function computeProjector(root: Object3D, view: HoodieView, { hpsY, scale, offsetYCm }: PlacementOptions): DecalProjector | null {
+export function computeProjector(
+  root: Object3D,
+  view: HoodieView,
+  { hpsY, scale, offsetYCm }: PlacementOptions,
+  includeHood = false,
+): DecalProjector | null {
   root.updateMatrixWorld(true);
   const all = garmentMeshes(root);
   // La capucha cae por encima del cuerpo: el estampado va sobre el cuerpo y las mangas, nunca sobre ella.
   const isBody = (m: Mesh) => !isHoodMesh(m, hpsY);
-  const meshes = all.filter(isBody);
-  const hoodMeshes = all.filter((m) => !isBody(m));
+  const body = all.filter(isBody);
+  const meshes = includeHood ? all : body;
+  // Con la capucha colgada y estirada sí se estampa sobre ella; si no, queda fuera.
+  const hoodMeshes = includeHood ? [] : all.filter((m) => !isBody(m));
   const hood = hoodMeshes.length ? new Box3() : null;
   hoodMeshes.forEach((m) => hood?.expandByObject(m));
   if (!meshes.length) return null;
@@ -150,7 +157,7 @@ export function computeProjector(root: Object3D, view: HoodieView, { hpsY, scale
   const v = new Vector3();
   let sum = 0;
   let count = 0;
-  for (const mesh of meshes) {
+  for (const mesh of body) {
     const pos = mesh.geometry.getAttribute('position');
     const step = Math.max(1, Math.floor(pos.count / 4000));
     for (let i = 0; i < pos.count; i += step) {

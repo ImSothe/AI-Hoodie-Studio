@@ -1,19 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
-import { Box3, Matrix4, MeshPhysicalMaterial, Vector3, type Color, type Material, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
+import { Box3, MeshPhysicalMaterial, Vector3, type Color, type Material, type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
 import { TEXTURE_LAYERS } from '@/lib/fabric/registry';
 import { HOODIE_VIEWS } from '@/lib/hoodie/spec';
 import { useStudio } from '@/lib/store';
 import { useCalibration } from '@/lib/three/calibration';
 import { buildDecalPatches, computeProjector, garmentMeshes } from '@/lib/three/decalPlacement';
 import { fabricAlbedo } from '@/lib/three/fabricShading';
-import { splitHood } from '@/lib/three/hoodSplit';
+import { createHoodHang } from '@/lib/three/hoodHang';
 import { setGarmentRoot } from '@/lib/three/garmentRegistry';
 import { knitNormalMap } from '@/lib/three/fabricTexture';
-import { FABRIC_MATERIAL, GLB_RECOLOR, GLB_TARGET_HEIGHT, HEM_Y, HOOD_LIFT_M, HOOD_PIVOT_Z, HOOD_TILT_RAD, MODEL_HPS_Y } from '@/lib/three/modelConfig';
+import { FABRIC_MATERIAL, GLB_RECOLOR, GLB_TARGET_HEIGHT, HEM_Y, MODEL_HPS_Y } from '@/lib/three/modelConfig';
 import { Hardware } from './Hardware';
 import { PrintDecal } from './PrintDecal';
 import type { DesignTextures } from './useDesignTextures';
@@ -33,7 +33,7 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
   const layerCounts = useStudio((s) => s.layerCounts);
   const showDetails = useStudio((s) => s.showDetails);
 
-  const { root, materials, hoodParts } = useMemo(() => {
+  const { root, materials } = useMemo(() => {
     const root = scene.clone(true);
     root.rotation.y = (rotationY * Math.PI) / 180;
     root.updateMatrixWorld(true);
@@ -78,8 +78,7 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
       mesh.material = Array.isArray(mesh.material) ? mesh.material.map(convert) : convert(mesh.material);
       (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((m) => materials.add(m));
     });
-    const hoodParts = splitHood(root);
-    return { root, materials: [...materials], hoodParts };
+    return { root, materials: [...materials] };
   }, [scene, rotationY]);
 
   // Color de la prenda en tiempo real SIN re-renderizar React: suscripción
@@ -107,34 +106,23 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
     });
   }, [root, showDetails]);
 
-  // Levantar la capucha: bisagra en el cuello. La capucha se echa hacia atrás y sube,
-  // con una animación suave; el cuerpo queda a la vista debajo.
-  const hoodRig = useMemo(
-    () =>
-      hoodParts.map((mesh) => {
-        mesh.updateMatrix();
-        mesh.matrixAutoUpdate = false;
-        return { mesh, rest: mesh.matrix.clone() };
-      }),
-    [hoodParts],
-  );
-  const hoodT = useRef(0);
+  // Colgar de la percha: la capucha se estira y se aplana (deformación continua, animada).
+  // Los estampados se recalculan al terminar, para que también pinten sobre la capucha.
+  const hang = useMemo(() => createHoodHang(root), [root]);
+  const hangT = useRef(0);
+  const [hanging, setHanging] = useState(false);
   useFrame((_, dt) => {
+    if (!hang) return;
     const target = useStudio.getState().hoodUp ? 1 : 0;
-    if (hoodT.current === target || !hoodRig.length) return;
-    const diff = target - hoodT.current;
-    hoodT.current = Math.abs(diff) < 0.002 ? target : hoodT.current + diff * Math.min(1, dt * 5);
-    const t = hoodT.current;
-    const pivot = new Vector3(0, MODEL_HPS_Y, HOOD_PIVOT_Z);
-    const anim = new Matrix4()
-      .makeTranslation(0, HOOD_LIFT_M * t, -HOOD_LIFT_M * 0.4 * t)
-      .multiply(new Matrix4().makeTranslation(pivot.x, pivot.y, pivot.z))
-      .multiply(new Matrix4().makeRotationX(HOOD_TILT_RAD * t))
-      .multiply(new Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
-    for (const { mesh, rest } of hoodRig) {
-      const parentWorld = mesh.parent ? mesh.parent.matrixWorld : new Matrix4();
-      mesh.matrix.copy(parentWorld.clone().invert().multiply(anim).multiply(parentWorld).multiply(rest));
-      mesh.matrixWorldNeedsUpdate = true;
+    if (hangT.current === target) return;
+    const diff = target - hangT.current;
+    hangT.current = Math.abs(diff) < 0.003 ? target : hangT.current + diff * Math.min(1, dt * 4);
+    hang.setProgress(hangT.current);
+    if (hangT.current === target) {
+      hang.settle(target);
+      setHanging(target === 1);
+    } else if (hanging) {
+      setHanging(false);
     }
   });
 
@@ -142,14 +130,14 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
   const projections = useMemo(
     () =>
       HOODIE_VIEWS.flatMap((view) => {
-        const projector = computeProjector(root, view, { hpsY: MODEL_HPS_Y, scale, offsetYCm });
+        const projector = computeProjector(root, view, { hpsY: MODEL_HPS_Y, scale, offsetYCm }, hanging);
         if (!projector) {
           console.warn(`[hoodie] No se encontró tejido para la cara "${view}". Revisa la calibración.`);
           return [];
         }
         return [{ view, patches: buildDecalPatches(projector) }];
       }),
-    [root, scale, offsetYCm],
+    [root, scale, offsetYCm, hanging],
   );
 
   useEffect(() => () => projections.forEach((p) => p.patches.forEach((patch) => patch.geometry.dispose())), [projections]);
