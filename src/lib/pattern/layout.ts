@@ -12,11 +12,11 @@ export const PATTERN_W = 1800;
 export const PATTERN_H = Math.round((PATTERN_W * (PATTERN_UV.v1 - PATTERN_UV.v0)) / (PATTERN_UV.u1 - PATTERN_UV.u0));
 
 /**
- * UV del GLB → píxel del lienzo. Las UV de este modelo están dibujadas «desde dentro»
- * (espejadas en horizontal): el lienzo las voltea para que cada pieza se vea como se
- * ve la prenda desde fuera y lo que se coloque se lea bien en 3D. Arriba = v mayor.
+ * UV del GLB → píxel del lienzo. En vertical, v crece hacia abajo (convención glTF): así el
+ * cuello queda arriba y el bajo abajo. Si alguna pieza del modelo está dibujada en espejo, el
+ * análisis (`isMirrored`) la voltea sobre sí misma para que se vea como desde fuera.
  */
 export const uvToPx = (u: number, v: number): [number, number] => [
-  ((PATTERN_UV.u1 - u) / (PATTERN_UV.u1 - PATTERN_UV.u0)) * PATTERN_W,
-  ((PATTERN_UV.v1 - v) / (PATTERN_UV.v1 - PATTERN_UV.v0)) * PATTERN_H,
+  ((u - PATTERN_UV.u0) / (PATTERN_UV.u1 - PATTERN_UV.u0)) * PATTERN_W,
+  ((v - PATTERN_UV.v0) / (PATTERN_UV.v1 - PATTERN_UV.v0)) * PATTERN_H,
 ];

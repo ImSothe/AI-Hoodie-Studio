@@ -2,7 +2,8 @@
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
-import type { PatternPanel } from '@/lib/pattern/panels';
+import type { PatternAnalysis } from '@/lib/pattern/analysis';
+import type { PatternMode } from '@/lib/pattern/guide';
 import { cn } from '@/lib/utils';
 import { PatternEditor } from './PatternEditor';
 import { PatternViewer, type PatternPose } from './PatternViewer';
@@ -15,22 +16,43 @@ const POSES: { id: PatternPose; label: string }[] = [
   { id: 'derecha', label: 'Lado der.' },
   { id: 'capucha', label: 'Capucha' },
 ];
+const MODES: { id: PatternMode; label: string; hint: string }[] = [
+  { id: 'joined', label: 'Todo unido', hint: 'Las piezas cosidas entre sí: un dibujo pasa de la espalda a las mangas y a la capucha.' },
+  { id: 'pieces', label: 'Piezas sueltas', hint: 'Cada pieza de tela por separado, como en el taller.' },
+];
 
 /** Estampado continuo por patrón: el diseño se coloca sobre las piezas planas y se ve cosido en 3D. */
 export function PatternShell() {
-  const [panels, setPanels] = useState<PatternPanel[]>([]);
+  const [analysis, setAnalysis] = useState<PatternAnalysis | null>(null);
+  const [mode, setMode] = useState<PatternMode>('joined');
   const [garmentColor, setGarmentColor] = useState(GARMENT_COLORS[0]);
   const [pose, setPose] = useState<{ name: PatternPose; n: number }>({ name: 'espalda', n: 0 });
-  const onPanels = useCallback((p: PatternPanel[]) => {
-    setPanels(p);
-  }, []);
+  const onAnalysis = useCallback((a: PatternAnalysis) => setAnalysis(a), []);
 
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-black text-fg">
       <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line px-5 py-3">
         <h1 className="text-[11px] font-normal tracking-[0.42em] whitespace-nowrap uppercase">AI Hoodie Studio · Patrón</h1>
-        <p className="font-editorial text-[15px] font-light text-muted italic">
-          Coloque el diseño sobre las piezas planas: se ve cosido en la prenda.
+        <div role="tablist" aria-label="Tipo de patrón" className="flex">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              aria-selected={mode === m.id}
+              title={m.hint}
+              onClick={() => setMode(m.id)}
+              className={cn(
+                'border-b px-4 py-1.5 text-[10px] tracking-[0.22em] uppercase transition',
+                mode === m.id ? 'border-fg text-fg' : 'border-transparent text-muted hover:text-fg',
+              )}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <p className="hidden font-editorial text-[15px] font-light text-muted italic lg:block">
+          {MODES.find((m) => m.id === mode)?.hint}
         </p>
         <Link href="/" className="ml-auto border-b border-muted pb-0.5 text-[9px] tracking-[0.22em] text-muted uppercase hover:text-fg">
           Volver al atelier
@@ -39,12 +61,12 @@ export function PatternShell() {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div className="min-h-0 border-r border-line">
-          <PatternEditor panels={panels} />
+          <PatternEditor analysis={analysis} mode={mode} />
         </div>
 
         <section className="relative min-h-0 bg-[#151515]">
           <div className="absolute inset-0">
-            <PatternViewer garmentColor={garmentColor} onPanels={onPanels} pose={pose} />
+            <PatternViewer garmentColor={garmentColor} mode={mode} onAnalysis={onAnalysis} pose={pose} />
           </div>
           <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex flex-wrap justify-center gap-2 px-3">
             {POSES.map((p) => (

@@ -5,7 +5,9 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
 import { Box3, BufferAttribute, MeshPhysicalMaterial, NeutralToneMapping, Vector3, type Mesh } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { fabricPanels, describePanels, outerMasks, type PatternPanel } from '@/lib/pattern/panels';
+import { analyzePattern, attachPatternUv, type PatternAnalysis } from '@/lib/pattern/analysis';
+import type { PatternMode } from '@/lib/pattern/guide';
+import { fabricPanels } from '@/lib/pattern/panels';
 import { getPrintTexture } from '@/lib/pattern/print';
 import { useCalibration } from '@/lib/three/calibration';
 import { knitNormalMap } from '@/lib/three/fabricTexture';
@@ -13,11 +15,19 @@ import { FABRIC_MATERIAL, GLB_TARGET_HEIGHT, HEM_Y, MODEL_URL } from '@/lib/thre
 import { ProductLighting, ProductShadows } from '../three/ProductLighting';
 
 /** Sudadera con el patrón estampado: cada pieza lee su zona del lienzo plano por sus UV. */
-function PatternGarment({ color, onPanels }: { color: string; onPanels: (p: PatternPanel[]) => void }) {
+function PatternGarment({
+  color,
+  mode,
+  onAnalysis,
+}: {
+  color: string;
+  mode: PatternMode;
+  onAnalysis: (a: PatternAnalysis) => void;
+}) {
   const { scene } = useGLTF(MODEL_URL);
   const rotationY = useCalibration((s) => s.rotationY);
 
-  const { root, materials } = useMemo(() => {
+  const { root, materials, analysis } = useMemo(() => {
     const root = scene.clone(true);
     root.rotation.y = (rotationY * Math.PI) / 180;
     root.updateMatrixWorld(true);
@@ -30,10 +40,13 @@ function PatternGarment({ color, onPanels }: { color: string; onPanels: (p: Patt
     root.position.set(root.position.x - center.x, root.position.y + HEM_Y - box.min.y, root.position.z - center.z);
     root.updateMatrixWorld(true);
 
-    const texture = getPrintTexture();
     const panels = new Set<Mesh>(fabricPanels(root));
+    // Geometría propia: la del GLB está en caché y aquí se le añaden atributos.
+    panels.forEach((mesh) => (mesh.geometry = mesh.geometry.clone()));
+    const analysis = analyzePattern(root);
+    attachPatternUv(analysis);
+
     const materials: MeshPhysicalMaterial[] = [];
-    const masks = outerMasks(root);
     root.traverse((obj) => {
       const mesh = obj as Mesh;
       if (!mesh.isMesh) return;
@@ -41,14 +54,16 @@ function PatternGarment({ color, onPanels }: { color: string; onPanels: (p: Patt
         mesh.visible = false; // cordones, cremalleras y puntadas: fuera
         return;
       }
-      // Geometría propia (la del GLB está en caché) con la marca exterior/forro por vértice.
-      mesh.geometry = mesh.geometry.clone();
-      mesh.geometry.setAttribute('printMask', new BufferAttribute(masks.get(mesh) ?? new Float32Array(mesh.geometry.getAttribute('position').count).fill(1), 1));
+      const count = mesh.geometry.getAttribute('position').count;
+      mesh.geometry.setAttribute(
+        'printMask',
+        new BufferAttribute(analysis.masks.get(mesh) ?? new Float32Array(count).fill(1), 1),
+      );
       const mat = new MeshPhysicalMaterial({ ...FABRIC_MATERIAL });
-      mat.map = texture;
       mat.normalMap = knitNormalMap();
       mat.normalScale.set(0.24, 0.24);
-      // El mapa no multiplica el color de la tela: la estampa se pinta encima, con su transparencia.
+      // El mapa no multiplica el color de la tela: la estampa se pinta encima, con su transparencia,
+      // y sólo en la capa exterior (el forro no recibe dibujo).
       mat.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader
           .replace('#include <common>', ['#include <common>', 'attribute float printMask;', 'varying float vPrintMask;'].join('\n'))
@@ -57,20 +72,30 @@ function PatternGarment({ color, onPanels }: { color: string; onPanels: (p: Patt
           .replace('#include <common>', ['#include <common>', 'varying float vPrintMask;'].join('\n'))
           .replace(
             '#include <map_fragment>',
-            `#ifdef USE_MAP
-  vec4 printColor = texture2D( map, vMapUv );
-  diffuseColor.rgb = mix( diffuseColor.rgb, printColor.rgb, printColor.a * vPrintMask );
-#endif`,
+            [
+              '#ifdef USE_MAP',
+              '  vec4 printColor = texture2D( map, vMapUv );',
+              '  diffuseColor.rgb = mix( diffuseColor.rgb, printColor.rgb, printColor.a * vPrintMask );',
+              '#endif',
+            ].join('\n'),
           );
       };
       mat.customProgramCacheKey = () => 'pattern-print';
       mesh.material = mat;
       materials.push(mat);
     });
-    return { root, materials };
+    return { root, materials, analysis };
   }, [scene, rotationY]);
 
-  useEffect(() => onPanels(describePanels(root)), [root, onPanels]);
+  useEffect(() => onAnalysis(analysis), [analysis, onAnalysis]);
+  // Cada modo lee su propia textura (y su propio juego de UV).
+  useEffect(() => {
+    const texture = getPrintTexture(mode);
+    materials.forEach((m) => {
+      m.map = texture;
+      m.needsUpdate = true;
+    });
+  }, [materials, mode]);
   useEffect(() => {
     materials.forEach((m) => m.color.set(color));
   }, [materials, color]);
@@ -90,12 +115,13 @@ export type PatternPose = keyof typeof POSES;
 
 interface Props {
   garmentColor: string;
-  onPanels: (p: PatternPanel[]) => void;
+  mode: PatternMode;
+  onAnalysis: (a: PatternAnalysis) => void;
   /** Cambia cuando se pide otra vista de cámara. */
   pose: { name: PatternPose; n: number };
 }
 
-export function PatternViewer({ garmentColor, onPanels, pose }: Props) {
+export function PatternViewer({ garmentColor, mode, onAnalysis, pose }: Props) {
   const controls = useRef<OrbitControlsImpl>(null);
 
   useEffect(() => {
@@ -115,7 +141,7 @@ export function PatternViewer({ garmentColor, onPanels, pose }: Props) {
     >
       <ProductLighting mood="nuit" />
       <Suspense fallback={null}>
-        <PatternGarment color={garmentColor} onPanels={onPanels} />
+        <PatternGarment color={garmentColor} mode={mode} onAnalysis={onAnalysis} />
       </Suspense>
       <ProductShadows mood="nuit" />
       <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={0.5} maxDistance={4} />

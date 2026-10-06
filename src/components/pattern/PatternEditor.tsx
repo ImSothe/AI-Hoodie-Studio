@@ -6,8 +6,9 @@ import { importFiles } from '@/lib/assets/importFiles';
 import { TEMPLATES, templateAsset } from '@/lib/assets/templates';
 import { restoreObject, tintObject, type Styled } from '@/lib/fabric/tint';
 import { PATTERN_H, PATTERN_W } from '@/lib/pattern/layout';
-import { drawPatternGuide, type PatternPanel } from '@/lib/pattern/panels';
-import { bindPrintSource, exportPatternPng, schedulePrint } from '@/lib/pattern/print';
+import type { PatternAnalysis } from '@/lib/pattern/analysis';
+import { drawPatternGuide, type PatternMode } from '@/lib/pattern/guide';
+import { bindPrintSource, exportPatternPng, schedulePrint, setPrintMode } from '@/lib/pattern/print';
 import type { GeneratedAsset } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -32,7 +33,7 @@ const btn =
  * Lienzo plano del patrón: las piezas de tela desplegadas. Todo lo que se
  * coloca aquí aparece cosido en la prenda 3D (por las UV del modelo).
  */
-export function PatternEditor({ panels }: { panels: PatternPanel[] }) {
+export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | null; mode: PatternMode }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLCanvasElement>(null);
@@ -129,8 +130,24 @@ export function PatternEditor({ panels }: { panels: PatternPanel[] }) {
     ctx.clearRect(0, 0, PATTERN_W, PATTERN_H);
     ctx.fillStyle = '#1b1b1b';
     ctx.fillRect(0, 0, PATTERN_W, PATTERN_H);
-    drawPatternGuide(ctx, panels, labels);
-  }, [panels, labels]);
+    if (analysis) drawPatternGuide(ctx, analysis, mode, labels);
+  }, [analysis, mode, labels]);
+
+  // Cada modo tiene su propio diseño: al cambiar se guarda el actual y se carga el del otro.
+  const modeRef = useRef(mode);
+  const saved = useRef<Partial<Record<PatternMode, object>>>({});
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || modeRef.current === mode) return;
+    saved.current[modeRef.current] = canvas.toObject(['hoodieRole', 'assetName']);
+    modeRef.current = mode;
+    canvas.discardActiveObject();
+    canvas.clear();
+    void canvas.loadFromJSON(saved.current[mode] ?? { objects: [] }).then(() => {
+      canvas.requestRenderAll();
+      setPrintMode(mode);
+    });
+  }, [mode]);
 
   const place = useCallback(async (assets: GeneratedAsset[]) => {
     const canvas = canvasRef.current;
@@ -283,6 +300,9 @@ export function PatternEditor({ panels }: { panels: PatternPanel[] }) {
             style={{ width: PATTERN_W * scale, height: PATTERN_H * scale }}
           />
           <div ref={hostRef} className="absolute inset-0" />
+          {!analysis && (
+            <p className="label-tech absolute inset-0 grid place-items-center text-center">Preparando el patrón…</p>
+          )}
         </div>
       </div>
     </section>
