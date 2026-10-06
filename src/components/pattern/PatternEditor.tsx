@@ -9,7 +9,8 @@ import { sizeOf } from '@/lib/pattern/layout';
 import type { PatternAnalysis } from '@/lib/pattern/analysis';
 import { drawPatternGuide } from '@/lib/pattern/guide';
 import type { PatternMode } from '@/lib/pattern/layout';
-import { bindPrintSource, exportPatternPng, schedulePrint, setPrintMode } from '@/lib/pattern/print';
+import { bakeToPieces } from '@/lib/pattern/bake';
+import { bindPrintSource, exportPatternPng, renderSource, schedulePrint, setPrintMode } from '@/lib/pattern/print';
 import type { GeneratedAsset } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -196,8 +197,53 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
   const download = () => {
     const a = document.createElement('a');
     a.href = exportPatternPng();
-    a.download = 'patron-estampado.png';
+    a.download = mode === 'joined' ? 'patron-unido.png' : 'patron-piezas.png';
     a.click();
+  };
+
+  /**
+   * Para fábrica: el dibujo cortado en las piezas sueltas de taller (cada pieza con su trozo, ya encajado con las
+   * vecinas) + un plano con los contornos y nombres para que el taller sepa qué es cada una.
+   */
+  const [exporting, setExporting] = useState(false);
+  const downloadFactory = async () => {
+    if (!analysis) return;
+    setExporting(true);
+    try {
+      await new Promise((r) => setTimeout(r, 30)); // deja pintar el aviso antes del cálculo
+      const art =
+        mode === 'joined'
+          ? bakeToPieces(analysis, renderSource(2) ?? document.createElement('canvas'))
+          : (renderSource(1) ?? document.createElement('canvas'));
+      const outline = document.createElement('canvas');
+      outline.width = sizeOf('pieces').w;
+      outline.height = sizeOf('pieces').h;
+      const octx = outline.getContext('2d')!;
+      octx.fillStyle = '#3a3a3a';
+      octx.fillRect(0, 0, outline.width, outline.height);
+      drawPatternGuide(octx, analysis, 'pieces', true);
+      octx.globalCompositeOperation = 'source-over';
+      octx.drawImage(art, 0, 0);
+      const blobOf = (c: HTMLCanvasElement) => new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/png'));
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      zip.file('estampado-por-piezas.png', await blobOf(art));
+      zip.file('plano-con-nombres.png', await blobOf(outline));
+      zip.file(
+        'LEEME.txt',
+        'estampado-por-piezas.png: el diseño ya cortado en las piezas de taller (fondo transparente), una sola imagen con todas las piezas.\n' +
+          'plano-con-nombres.png: lo mismo sobre las siluetas de cada pieza, con su nombre, para que el taller sepa cuál es cuál.\n' +
+          'Los dibujos que pasan de una pieza a otra encajan en las costuras. No incluyen margen de costura ni sangrado.\n',
+      );
+      const url = URL.createObjectURL(await zip.generateAsync({ type: 'blob' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'patron-para-fabrica.zip';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -262,7 +308,10 @@ export function PatternEditor({ analysis, mode }: { analysis: PatternAnalysis | 
           Nombres {labels ? 'sí' : 'no'}
         </button>
         <button type="button" className={cn(btn, 'ml-auto')} onClick={download}>
-          Descargar patrón PNG
+          PNG de este plano
+        </button>
+        <button type="button" className={btn} disabled={!analysis || exporting} onClick={() => void downloadFactory()}>
+          {exporting ? 'Preparando…' : 'Para fábrica (piezas)'}
         </button>
       </div>
 

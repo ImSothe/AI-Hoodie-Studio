@@ -71,3 +71,9 @@ export function exportPatternPng(): string {
   paint(mode);
   return getPrintCanvas(mode).toDataURL('image/png');
 }
+
+/** El lienzo de diseño del modo actual dibujado a `multiplier` veces su tamaño (null si aún no hay lienzo). */
+export function renderSource(multiplier: number): HTMLCanvasElement | null {
+  if (!source || source.destroyed) return null;
+  return source.toCanvasElement(multiplier);
+}
