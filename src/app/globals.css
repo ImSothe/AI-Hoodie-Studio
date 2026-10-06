@@ -45,6 +45,36 @@
   }
 }
 
+/*
+ * Legibilidad en pantallas de densidad normal (1080p a 100 %): el peso 300 y los
+ * cuerpos de 9–10 px con tracking ancho salen finos y dentados. Se sube el peso,
+ * el cuerpo mínimo y se afloja el tracking; en pantallas nítidas (retina) no se toca.
+ */
+@media (max-resolution: 1.25dppx) {
+  body {
+    font-weight: 400;
+    -webkit-font-smoothing: auto;
+  }
+  .label-tech {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+  }
+  .num {
+    font-weight: 400;
+  }
+  [class*='text-[9'] {
+    font-size: 10.5px !important;
+    letter-spacing: 0.14em !important;
+  }
+  [class*='text-[10px]'],
+  [class*='text-[10.5px]'] {
+    font-size: 11.5px !important;
+  }
+  .font-light {
+    font-weight: 400 !important;
+  }
+}
+
 html,
 body {
   height: 100%;
