@@ -308,11 +308,11 @@ function Editor({ onClose }: { onClose: () => void }) {
   return (
     <div role="dialog" aria-modal="true" aria-label="Separar partes de la pieza" className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4 backdrop-blur-sm">
       <div className="flex max-h-full w-full max-w-5xl flex-col border border-white/10 bg-black md:flex-row">
-        <div className="flex min-h-0 flex-1 items-center justify-center p-4">
+        <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-4">
           {ready && bmp ? (
             <div
               className={cn('relative max-h-[72dvh] max-w-full overflow-hidden ring-1 ring-white/15', light ? 'bg-[#d9d9d9]' : 'bg-[#1b1b1b]')}
-              style={{ aspectRatio: aspect, height: 'min(72dvh, 640px)' }}
+              style={{ aspectRatio: aspect, width: `min(100%, calc(min(72dvh, 640px) * ${aspect}))` }}
             >
               <canvas ref={display} width={bmp.width} height={bmp.height} className="absolute inset-0 size-full" />
               <canvas
