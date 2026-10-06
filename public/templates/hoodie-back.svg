@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="760" viewBox="0 0 800 760">
+<defs>
+  <radialGradient id="studio" cx="50%" cy="42%" r="75%">
+    <stop offset="0%" stop-color="#1c1c1c"/>
+    <stop offset="100%" stop-color="#070707"/>
+  </radialGradient>
+  <linearGradient id="fabric" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#1c1c20"/>
+    <stop offset="100%" stop-color="#0c0c0e"/>
+  </linearGradient>
+  <linearGradient id="hood" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#202025"/>
+    <stop offset="100%" stop-color="#121215"/>
+  </linearGradient>
+</defs>
+  <rect data-role="backdrop" x="0" y="0" width="800" height="760" fill="url(#studio)"/>
+  <!-- cuerpo + mangas -->
+  <path data-fill-tone="body" data-stroke-tone="seam" fill="url(#fabric)" stroke="#33333a" stroke-width="2" d="M 335 190 Q 240 205 150 236 C 120 330 75 470 52 600 L 60 650 L 114 658 L 118 612 C 135 520 155 440 170 372 C 167 450 168 560 172 652 L 174 694 L 626 694 L 628 652 C 632 560 633 450 630 372 C 645 440 665 520 682 612 L 686 658 L 740 650 L 748 600 C 725 470 680 330 650 236 Q 560 205 465 190 Q 400 206 335 190 Z"/>
+  <!-- capucha vista desde atrás -->
+  <path data-fill-tone="hood" data-stroke-tone="seam" fill="url(#hood)" stroke="#33333a" stroke-width="1.8" d="M 318 206 C 298 116 330 38 400 34 C 470 38 502 116 482 206 Q 400 226 318 206 Z"/>
+  <path data-stroke-tone="seam" fill="none" stroke="#33333a" stroke-width="1.6" d="M 400 34 L 400 216"/>
+  <path data-stroke-tone="stitch" fill="none" stroke="#3d3d45" stroke-width="1" stroke-dasharray="3 3" d="M 394 40 L 394 214"/>
+  <path data-stroke-tone="stitch" fill="none" stroke="#3d3d45" stroke-width="1" stroke-dasharray="3 3" d="M 406 40 L 406 214"/>
+  <path data-stroke-tone="seam" fill="none" stroke="#33333a" stroke-width="1.6" d="M 335 190 Q 400 214 465 190"/>
+
+  <path data-stroke-tone="seam" fill="none" stroke="#33333a" stroke-width="1.6" d="M 178 229 Q 188 300 170 372"/>
+  <path data-stroke-tone="seam" fill="none" stroke="#33333a" stroke-width="1.6" d="M 622 229 Q 612 300 630 372"/>
+  <path data-stroke-tone="seam" fill="none" stroke="#33333a" stroke-width="1.6" d="M 52 600 L 118 612"/>
+  <path data-stroke-tone="seam" fill="none" stroke="#33333a" stroke-width="1.6" d="M 748 600 L 682 612"/>
+  <path data-stroke-tone="rib" fill="none" stroke="#24242a" stroke-width="1" d="M 61.4 604.7 L 67.7 648.1 M 70.9 606.4 L 75.4 649.3 M 80.3 608.1 L 83.1 650.4 M 89.7 609.9 L 90.9 651.6 M 99.1 611.6 L 98.6 652.7 M 108.6 613.3 L 106.3 653.9"/>
+  <path data-stroke-tone="rib" fill="none" stroke="#24242a" stroke-width="1" d="M 738.6 604.7 L 732.3 648.1 M 729.1 606.4 L 724.6 649.3 M 719.7 608.1 L 716.9 650.4 M 710.3 609.9 L 709.1 651.6 M 700.9 611.6 L 701.4 652.7 M 691.4 613.3 L 693.7 653.9"/>
+  <path data-stroke-tone="seam" fill="none" stroke="#33333a" stroke-width="1.6" d="M 172 652 L 628 652"/>
+  <path data-stroke-tone="stitch" fill="none" stroke="#3d3d45" stroke-width="1" stroke-dasharray="3 3" d="M 173 646 L 627 646"/>
+  <path data-stroke-tone="rib" fill="none" stroke="#24242a" stroke-width="1" d="M 184.0 656 L 184.0 690 M 195.0 656 L 195.0 690 M 206.0 656 L 206.0 690 M 217.0 656 L 217.0 690 M 228.0 656 L 228.0 690 M 239.0 656 L 239.0 690 M 250.0 656 L 250.0 690 M 261.0 656 L 261.0 690 M 272.0 656 L 272.0 690 M 283.0 656 L 283.0 690 M 294.0 656 L 294.0 690 M 305.0 656 L 305.0 690 M 316.0 656 L 316.0 690 M 327.0 656 L 327.0 690 M 338.0 656 L 338.0 690 M 349.0 656 L 349.0 690 M 360.0 656 L 360.0 690 M 371.0 656 L 371.0 690 M 382.0 656 L 382.0 690 M 393.0 656 L 393.0 690 M 404.0 656 L 404.0 690 M 415.0 656 L 415.0 690 M 426.0 656 L 426.0 690 M 437.0 656 L 437.0 690 M 448.0 656 L 448.0 690 M 459.0 656 L 459.0 690 M 470.0 656 L 470.0 690 M 481.0 656 L 481.0 690 M 492.0 656 L 492.0 690 M 503.0 656 L 503.0 690 M 514.0 656 L 514.0 690 M 525.0 656 L 525.0 690 M 536.0 656 L 536.0 690 M 547.0 656 L 547.0 690 M 558.0 656 L 558.0 690 M 569.0 656 L 569.0 690 M 580.0 656 L 580.0 690 M 591.0 656 L 591.0 690 M 602.0 656 L 602.0 690 M 613.0 656 L 613.0 690"/>
+  <path data-stroke-tone="fold" fill="none" stroke="#08080a" stroke-width="2" stroke-opacity="0.6" d="M 205 420 C 230 470 228 540 210 610"/>
+  <path data-stroke-tone="fold" fill="none" stroke="#08080a" stroke-width="2" stroke-opacity="0.6" d="M 595 420 C 570 470 572 540 590 610"/>
+
+</svg>

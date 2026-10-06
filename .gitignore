@@ -1,0 +1,19 @@
+# dependencias
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# entorno (las API keys NUNCA se suben)
+.env
+.env*.local
+
+# varios
+.DS_Store
+npm-debug.log*
+
+# modelo 3D propio (50 MB, no se versiona)
+/public/models/*.glb
