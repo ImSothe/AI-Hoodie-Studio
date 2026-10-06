@@ -331,7 +331,19 @@ export function ElementInkPanel() {
         ]}
       />
       {mode === 'gradient' ? (
-        <GradientEditor key={style.code} initial={style.gradient ?? { from: ink, to: mix(ink, '#000000', 0.62), angle: 90 }} />
+        <>
+          <GradientEditor key={style.code} initial={style.gradient ?? { from: ink, to: mix(ink, '#000000', 0.62), angle: 90 }} />
+          {style.technique === 'Tinta Reflectante D3O/3M' && (
+            <p className="mt-4 font-editorial text-[13px] leading-snug font-light text-muted italic">
+              Ojo: la tinta reflectante es de un solo color. El degradado se ve en pantalla, pero el taller tendrá que resolverlo (plata plana o capas). Queda anotado en el dossier.
+            </p>
+          )}
+          {style.technique === 'Bordado Alto Relieve' && (
+            <p className="mt-4 font-editorial text-[13px] leading-snug font-light text-muted italic">
+              En bordado, el degradado se hace mezclando hilos entre los dos colores: el taller propondrá la paleta. Queda anotado en el dossier.
+            </p>
+          )}
+        </>
       ) : (
       <div
         onPointerDown={() => (interacting.current = true)}

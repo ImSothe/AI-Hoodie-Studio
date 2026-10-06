@@ -85,6 +85,10 @@ export async function createPart(
     inkColor: obj.inkColor,
     originalInk: obj.originalInk,
     tecnica: obj.tecnica,
+    // El degradado ya está pintado en la imagen: cada parte conserva su ficha (colores de salida).
+    gradient: obj.gradient,
+    tonoShift: obj.tonoShift,
+    hiloAcabado: obj.hiloAcabado,
     elementKind: 'png' as const,
   };
 

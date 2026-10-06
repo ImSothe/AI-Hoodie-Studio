@@ -20,14 +20,14 @@ export const LOOKS: Look[] = [
   {
     id: 'cromo',
     label: 'Cromo',
-    hint: 'Reflectante en degradado',
+    hint: 'Aspecto cromado (consultar viabilidad)',
     technique: 'Tinta Reflectante D3O/3M',
     gradient: { from: '#FFFFFF', to: '#7C8591', angle: 90 },
   },
   {
     id: 'hielo',
     label: 'Hielo',
-    hint: 'Reflectante azulado',
+    hint: 'Reflectante azulado (consultar viabilidad)',
     technique: 'Tinta Reflectante D3O/3M',
     gradient: { from: '#BEE9FF', to: '#FFFFFF', angle: 135 },
   },
@@ -35,7 +35,7 @@ export const LOOKS: Look[] = [
   {
     id: 'fuego',
     label: 'Fuego bordado',
-    hint: 'Relieve en degradado',
+    hint: 'Hilos en degradado (paleta a consultar)',
     technique: 'Bordado Alto Relieve',
     gradient: { from: '#FF2A00', to: '#FFB000', angle: 90 },
   },

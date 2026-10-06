@@ -21,6 +21,7 @@ import {
   metalFinish,
   pxToCm,
   type FabricSpec,
+  type GradientSpec,
   type HardwareSpec,
   type HoodieView,
   type Rect,
@@ -96,6 +97,10 @@ export interface ElementSpec {
   colorRef: string;
   threadFinish: ThreadFinish | null;
   tonalShift: TonalShift | null;
+  /** Degradado de dos colores (hex = el color de salida), o null si el color es liso. */
+  gradient: GradientSpec | null;
+  /** Ubicación estimada en la prenda: Cuerpo, Manga izq./der. (de quien viste), Capucha. */
+  zone: string;
   /** Superficie que cubre el hilo / la tinta (mm²). */
   areaMm2: number;
   /** Puntadas estimadas (sólo bordados). */
@@ -220,6 +225,24 @@ function placementOf(view: HoodieView, r: Rect, angle = 0): Placement {
   };
 }
 
+/**
+ * Ubicación aproximada de una pieza a partir de su centro en el plano de la
+ * prenda. Izquierda y derecha son las de quien viste la prenda (criterio de
+ * fábrica): de frente es el lado derecho de la imagen, de espalda el izquierdo.
+ */
+function zoneOf(view: HoodieView, r: Rect): string {
+  const half = (GARMENT.chestWidthCm / 2) * PX_PER_CM;
+  const cx = r.left + r.width / 2 - CENTER_X;
+  const cy = r.top + r.height / 2;
+  if (cy < HPS_Y - 20) return 'Capucha';
+  const spans = r.left < CENTER_X - half || r.left + r.width > CENTER_X + half;
+  if (Math.abs(cx) > half) {
+    const wearerLeft = view === 'front' ? cx > 0 : cx < 0;
+    return wearerLeft ? 'Manga izq.' : 'Manga der.';
+  }
+  return spans ? 'Cuerpo y mangas' : 'Cuerpo';
+}
+
 function describeElement(canvas: Canvas, view: HoodieView, o: FabricObject, index: number): ElementSpec {
   const p = placementOf(view, o.getBoundingRect(), o.angle);
   const area = coverageMm2(canvas, o);
@@ -227,7 +250,8 @@ function describeElement(canvas: Canvas, view: HoodieView, o: FabricObject, inde
   const kind = kindOfObject(o);
   const technique = techniqueOfObject(o);
   const tonal = technique === TONAL_TECHNIQUE;
-  const hex = s.inkColor ?? null;
+  const gradient = !tonal && s.gradient ? { ...s.gradient } : null;
+  const hex = gradient ? gradient.from.toUpperCase() : (s.inkColor ?? null);
   const threadFinish = tonal ? (s.hiloAcabado ?? 'satin') : null;
   return {
     code: elementCode(view, index),
@@ -245,9 +269,13 @@ function describeElement(canvas: Canvas, view: HoodieView, o: FabricObject, inde
     hex,
     technique,
     techniqueCode: TECHNIQUE_INFO[technique].code,
-    colorRef: colorReference(technique, hex, threadFinish),
+    colorRef: gradient
+      ? `${TECHNIQUE_INFO[technique].code}-GRAD-${gradient.from.replace('#', '').toUpperCase()}-${gradient.to.replace('#', '').toUpperCase()}`
+      : colorReference(technique, hex, threadFinish),
     threadFinish,
     tonalShift: tonal ? (s.tonoShift ?? 'exact') : null,
+    gradient,
+    zone: zoneOf(view, o.getBoundingRect()),
     areaMm2: Math.round(area),
     stitchesEstimate: estimateStitches(technique, area),
   };
@@ -371,6 +399,8 @@ interface InkRow {
   hex: string | null;
   finish: string;
   shift: TonalShift | null;
+  /** Segundo color si la referencia es un degradado. */
+  hexTo: string | null;
   pieces: string[];
 }
 
@@ -398,8 +428,9 @@ function inkRows(elements: ElementSpec[]): InkRow[] {
         ref: e.colorRef,
         technique: e.technique,
         hex: e.hex,
-        finish: techniqueFinish(e.technique, e.threadFinish),
+        finish: `${techniqueFinish(e.technique, e.threadFinish)}${e.gradient ? ` · degradado ${e.gradient.angle}°` : ''}`,
         shift: e.tonalShift,
+        hexTo: e.gradient ? e.gradient.to.toUpperCase() : null,
         pieces: [e.code],
       });
   }
@@ -923,7 +954,7 @@ async function buildPdf(views: ViewExport[], opts: TechPackOptions, reference: s
       const c1 = at(1);
       text(fit(e.name, c1.w, 10.5, 'serif'), c1.x, base, { face: 'serif', size: 10.5 });
       const kindLabel = e.font ? `${e.font} · texto` : e.kind === 'png' ? 'Raster PNG' : 'Vector SVG';
-      caps(kindLabel, c1.x, sub, { size: 4.8, cs: 0.25, max: c1.w });
+      caps(`${kindLabel} · ${e.zone}`, c1.x, sub, { size: 4.8, cs: 0.25, max: c1.w });
       const c2 = at(2);
       text(e.techniqueCode, c2.x, base, { face: 'mono', size: 7.4, cs: 0.3 });
       const tSub = e.threadFinish
@@ -939,9 +970,19 @@ async function buildPdf(views: ViewExport[], opts: TechPackOptions, reference: s
       const c6 = at(6);
       text(`${e.rotationDeg}°`, c6.right, base, { face: 'mono', size: 7.4, align: 'right' });
       const c7 = at(7);
-      if (e.hex) swatch(e.hex, c7.x, y + 2.2, 3, 3);
-      text(fit(e.colorRef, c7.w - 4.5, 6.8, 'mono'), c7.x + 4.5, base, { face: 'mono', size: 6.8 });
-      const inkSub = e.tonalShift ? shiftShort(e.tonalShift) : e.hex ? e.hex : 'Colores del arte';
+      if (e.hex && e.gradient) {
+        swatch(e.hex, c7.x, y + 2.2, 3, 1.5);
+        swatch(e.gradient.to, c7.x, y + 3.7, 3, 1.5);
+      } else if (e.hex) swatch(e.hex, c7.x, y + 2.2, 3, 3);
+      const refSize = e.gradient ? 5.2 : 6.8;
+      text(fit(e.colorRef, c7.w - 4.5, refSize, 'mono'), c7.x + 4.5, base, { face: 'mono', size: refSize });
+      const inkSub = e.gradient
+        ? `${e.hex} a ${e.gradient.to.toUpperCase()} · ${e.gradient.angle}°`
+        : e.tonalShift
+          ? shiftShort(e.tonalShift)
+          : e.hex
+            ? e.hex
+            : 'Colores del arte';
       caps(inkSub, c7.x + 4.5, sub, { size: 4.8, cs: 0.25, max: c7.w - 4.5 });
       line(M, y + rowH, W - M, y + rowH, RULE, FINE);
       y += rowH;
@@ -958,7 +999,51 @@ async function buildPdf(views: ViewExport[], opts: TechPackOptions, reference: s
     }
     const fonts = [...new Set(v.elements.map((e) => e.font).filter(Boolean))];
     if (fonts.length) notes.push(['TXT', `Textos en ${fonts.join(', ')}: convertir a contornos antes de digitalizar o grabar pantallas.`]);
-    if (!p.insidePrintArea) notes.push(['!', 'El conjunto sobrepasa el área máxima de impresión: confirmar con el taller antes de producir.']);
+    for (const e of v.elements) {
+      if (!e.gradient) continue;
+      const g = e.gradient;
+      const range = `${e.hex} a ${g.to.toUpperCase()}, dirección ${g.angle}° (0° = de izquierda a derecha, 90° = de arriba abajo)`;
+      const code = TECHNIQUE_INFO[e.technique].code;
+      if (code === 'REF') {
+        notes.push([
+          e.code,
+          `Degradado ${range} sobre tinta reflectante. La tinta reflectante es de un solo color: el degradado sólo es una referencia visual. Confirmar con el taller si se resuelve con plata plana, en capas o sustituyendo el efecto.`,
+        ]);
+      } else if (code === 'BAR') {
+        notes.push([
+          e.code,
+          `Degradado ${range} en bordado. Se resuelve mezclando hilos de la gama entre los dos colores; el taller debe proponer la paleta de hilos y el número de colores.`,
+        ]);
+      } else {
+        notes.push([
+          e.code,
+          `Degradado ${range} en serigrafía. Exige pantalla de degradado (fuente dividida) o impresión digital; confirmar el proceso y las pasadas. El archivo por técnica trae el degradado ya pintado.`,
+        ]);
+      }
+    }
+    if (v.elements.some((e) => e.kind === 'png')) {
+      const codes = v.elements
+        .filter((e) => e.kind === 'png')
+        .map((e) => e.code)
+        .join(' · ');
+      notes.push([
+        'RAS',
+        `Piezas raster (${codes}): imágenes subidas, de IA o partes separadas de un diseño. Para pantalla o digitalización de bordado hay que vectorizarlas o entregar el original a 300 dpi o más.`,
+      ]);
+    }
+    const onSleeves = v.elements.filter((e) => e.zone !== 'Cuerpo');
+    if (onSleeves.length) {
+      notes.push([
+        'UBI',
+        `Ubicación estimada a partir del plano (${onSleeves.map((e) => `${e.code} ${e.zone}`).join(' · ')}). Izquierda y derecha son las de quien viste la prenda. Confirmar con el plano técnico antes de producir.`,
+      ]);
+    }
+    if (!p.insidePrintArea) {
+      notes.push([
+        '!',
+        'El conjunto sobrepasa la zona recomendada del cuerpo (38 × 48 cm en espalda, 30 × 24 cm en pecho): es válido, pero confirmar con el taller el tamaño máximo de pantalla o bastidor antes de producir.',
+      ]);
+    }
     y += 7;
     ensure(12);
     y = sectionTitle('02', 'Notas de taller', y);
@@ -1020,12 +1105,12 @@ async function buildPdf(views: ViewExport[], opts: TechPackOptions, reference: s
     // 02 Tintas e hilos
     y = sectionTitle('02', 'Tintas e hilos', y);
     const cols: Column[] = [
-      { title: 'Referencia', w: 31 },
-      { title: 'Muestra', w: 14 },
-      { title: 'Técnica', w: 30 },
-      { title: 'HEX', w: 16 },
+      { title: 'Referencia', w: 37 },
+      { title: 'Muestra', w: 12 },
+      { title: 'Técnica', w: 24 },
+      { title: 'HEX', w: 17 },
       { title: 'RGB', w: 24 },
-      { title: 'CMYK aprox.', w: 23 },
+      { title: 'CMYK aprox.', w: 24 },
       { title: 'Acabado', w: 24 },
       { title: 'Piezas', w: 16 },
     ];
@@ -1046,10 +1131,18 @@ async function buildPdf(views: ViewExport[], opts: TechPackOptions, reference: s
       };
       text(fit(ink.ref, cols[0].w - 1.5, 6.6, 'mono'), next(0), base, { face: 'mono', size: 6.6 });
       const sx = next(1);
-      if (ink.hex) swatch(ink.hex, sx, y + 1.8, 7, 6);
+      if (ink.hex && ink.hexTo) {
+        swatch(ink.hex, sx, y + 1.8, 7, 3);
+        swatch(ink.hexTo, sx, y + 4.8, 7, 3);
+      } else if (ink.hex) swatch(ink.hex, sx, y + 1.8, 7, 6);
       const tx = next(2);
       text(TECHNIQUE_INFO[ink.technique].short, tx, base, { face: 'serif', size: 10.5 });
-      caps(ink.technique === TONAL_TECHNIQUE ? shiftLabel(ink.shift) : TECHNIQUE_INFO[ink.technique].code, tx, sub, {
+      const techSub = ink.hexTo
+        ? `${TECHNIQUE_INFO[ink.technique].code} · a ${ink.hexTo}`
+        : ink.technique === TONAL_TECHNIQUE
+          ? shiftLabel(ink.shift)
+          : TECHNIQUE_INFO[ink.technique].code;
+      caps(techSub, tx, sub, {
         size: 4.8,
         cs: 0.25,
         max: cols[2].w - 1.5,
@@ -1275,6 +1368,7 @@ export async function buildTechPack(opts: TechPackOptions) {
       hex: r.hex,
       ...(r.hex ? colorBreakdown(r.hex) : {}),
       finish: r.finish,
+      gradientTo: r.hexTo,
       tonalShift: r.shift,
       pieces: r.pieces,
     })),
