@@ -14,6 +14,7 @@ import { CalibrationPanel } from './CalibrationPanel';
 import { cameraPose } from './CameraRig';
 import { HoodieScene } from './HoodieScene';
 import { MissingModelPoster } from './MissingModelPoster';
+import { SelectionFrame } from './SelectionFrame';
 import { captureTransparent } from './snapshot';
 import { useModelStatus } from './useModelStatus';
 import { ViewerErrorBoundary } from './ViewerErrorBoundary';
@@ -54,6 +55,7 @@ export function HoodieViewer() {
   const elements = useStudio((s) => s.elements);
   const garmentColor = useStudio((s) => s.garmentColor);
   const immersive = useStudio((s) => s.immersive);
+  const stageMood = useStudio((s) => s.stageMood);
   const { requestCamera, focusView, setSnapshot3d } = useStudio.getState();
   const getThree = useRef<(() => RootState) | null>(null);
   const [flash, setFlash] = useState(false);
@@ -99,6 +101,7 @@ export function HoodieViewer() {
   return (
     <div
       className="stage-bg relative h-full min-h-0"
+      data-mood={stageMood}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(ASSET_DRAG_MIME)) return;
         e.preventDefault();
@@ -120,7 +123,7 @@ export function HoodieViewer() {
                 getThree.current = get;
               }}
             >
-              <HoodieScene frameOffsetPx={desktop ? PANEL_SPACE / 2 : 0} />
+              <HoodieScene frameOffsetPx={desktop ? PANEL_SPACE / 2 : 0} directEdit />
             </Canvas>
             <LoadingOverlay />
           </ViewerErrorBoundary>
@@ -128,6 +131,8 @@ export function HoodieViewer() {
         {status.state === 'missing' && <MissingModelPoster onRetry={reload} />}
         {status.state === 'error' && <MissingModelPoster error={status.message} onRetry={reload} />}
       </div>
+
+      {ready && <SelectionFrame getThree={getThree} />}
 
       {/* Cabecera editorial */}
       <header
@@ -138,7 +143,7 @@ export function HoodieViewer() {
       >
         <div className="min-w-0">
           <p className="label-tech">
-            {season} <span className="mx-2 text-white/25">|</span>
+            {season} <span className="mx-2 text-fg/25">|</span>
             <span className="num tracking-[0.12em]">{styleCode}</span>
           </p>
           <h2 className="mt-3 truncate font-serif text-4xl font-normal tracking-[0.14em] text-fg uppercase md:text-5xl">
@@ -146,13 +151,13 @@ export function HoodieViewer() {
           </h2>
           <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-light tracking-[0.08em] text-muted">
             <span>{GARMENT.name}</span>
-            <span className="text-white/25">—</span>
+            <span className="text-fg/25">—</span>
             <span>
               {fabric.construction} <span className="num">{fabric.weightGsm} g/m²</span>
             </span>
-            <span className="text-white/25">—</span>
+            <span className="text-fg/25">—</span>
             <span className="inline-flex items-center gap-2">
-              <span className="inline-block size-2 ring-1 ring-white/25" style={{ background: garmentColor }} />
+              <span className="inline-block size-2 ring-1 ring-fg/25" style={{ background: garmentColor }} />
               <span className="num">{garmentColor}</span>
             </span>
           </p>
@@ -163,6 +168,15 @@ export function HoodieViewer() {
         </div>
         {ready && (
           <div className="pointer-events-auto flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => useStudio.getState().setStageMood(stageMood === 'nuit' ? 'salon' : 'nuit')}
+              aria-pressed={stageMood === 'salon'}
+              title="Cambiar entre estudio oscuro y sala clara"
+              className="border border-fg/20 px-3 py-2 text-[10px] tracking-[0.22em] text-fg uppercase transition hover:border-fg/60"
+            >
+              {stageMood === 'nuit' ? 'Fondo claro' : 'Fondo oscuro'}
+            </button>
             <CalibrationPanel />
             <button
               type="button"

@@ -46,7 +46,7 @@ export function SelectionPanel() {
   };
 
   return (
-    <Section title="Calibres · posición">
+    <Section title="Tamaño y posición">
       <label className="flex items-baseline justify-between gap-4 border-b border-line/70 py-2">
         <span className="label-tech">Ancho</span>
         <span className="flex items-baseline gap-1">
@@ -63,9 +63,9 @@ export function SelectionPanel() {
         </span>
       </label>
       <SpecRow label="Alto">{mm(selection.heightCm)} mm</SpecRow>
-      <SpecRow label="Y · desde HPS">{mm(selection.topFromHpsCm)} mm</SpecRow>
-      <SpecRow label="X · desde eje">{signed(mm(selection.offsetXCm))} mm</SpecRow>
-      <SpecRow label="Área">{selection.insidePrintArea ? 'Dentro' : 'Fuera del área'}</SpecRow>
+      <SpecRow label="Altura desde el hombro">{mm(selection.topFromHpsCm)} mm</SpecRow>
+      <SpecRow label="Desde el centro">{signed(mm(selection.offsetXCm))} mm</SpecRow>
+      <SpecRow label="Zona recomendada">{selection.insidePrintArea ? 'Dentro' : 'Fuera (se estampa igual)'}</SpecRow>
 
       <label className="mt-4 block">
         <span className="flex items-baseline justify-between">
@@ -85,10 +85,10 @@ export function SelectionPanel() {
 
       <div className="mt-5 grid grid-cols-2 gap-px bg-line">
         {[
-          ['Centrar en eje', () => withCanvas((c, v) => centerActive(c, v, 'x'))],
-          ['Centrar en área', () => withCanvas((c, v) => centerActive(c, v, 'both'))],
-          ['Ajustar al área', () => withCanvas(fitActiveToPrintArea)],
-          ['Simetría', () => withCanvas(flipActive)],
+          ['Centrar', () => withCanvas((c, v) => centerActive(c, v, 'x'))],
+          ['Centrar en la zona', () => withCanvas((c, v) => centerActive(c, v, 'both'))],
+          ['Ajustar a la zona', () => withCanvas(fitActiveToPrintArea)],
+          ['Espejo', () => withCanvas(flipActive)],
           ['Duplicar', () => withCanvas((c, v) => void duplicateActive(c, v))],
           ['Subir capa', () => withCanvas((c, v) => changeActiveStacking(c, v, 'up'))],
         ].map(([label, onClick]) => (
@@ -102,7 +102,7 @@ export function SelectionPanel() {
           Bajar capa
         </Button>
         <Button variant="danger" className="border-0 bg-black" onClick={() => withCanvas(removeActive)}>
-          Retirar pieza
+          Quitar pieza
         </Button>
       </div>
     </Section>

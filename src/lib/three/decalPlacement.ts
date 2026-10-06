@@ -91,7 +91,7 @@ export function surfaceHit(root: Object3D, x: number, y: number, side: HoodieVie
 }
 
 /** Paneles del tejido: las mallas grandes (se descartan cordones, puntadas, botones...). */
-function garmentMeshes(root: Object3D) {
+export function garmentMeshes(root: Object3D) {
   const modelBox = new Box3().setFromObject(root);
   const modelSize = modelBox.getSize(new Vector3());
   const reference = Math.max(modelSize.x, modelSize.y, modelSize.z);
@@ -183,4 +183,32 @@ export function buildDecalPatches(projector: DecalProjector): DecalPatch[] {
     patches.push({ mesh, geometry });
   }
   return patches;
+}
+
+/** Paso entre el lienzo 2D (px de escena) y el espacio 3D de la proyección de una cara. */
+export interface ProjectionMapper {
+  /** Punto de mundo → coordenadas de escena del lienzo. */
+  toCanvas: (p: Vector3) => { x: number; y: number };
+  /** Coordenadas de escena del lienzo → punto de mundo, a la profundidad z dada. */
+  toWorld: (x: number, y: number, z: number) => Vector3;
+}
+
+/**
+ * Inversa exacta del proyector de computeProjector: como la proyección es
+ * ortográfica, cada punto de la superficie visto de frente o de espalda tiene
+ * un único punto del lienzo (y viceversa). Es lo que permite arrastrar un
+ * gráfico directamente sobre la prenda.
+ */
+export function projectionMapper(view: HoodieView, { hpsY, scale, offsetYCm }: PlacementOptions): ProjectionMapper {
+  const zone = getDesignZoneRect(view);
+  const metersPerPx = scale / (PX_PER_CM * 100);
+  const centerY = hpsY + offsetYCm / 100 - (zone.top + zone.height / 2 - HPS_Y) * metersPerPx;
+  // De espalda el proyector está girado 180°: el +x del lienzo es el -x del mundo.
+  const sign = view === 'front' ? 1 : -1;
+  const cx = zone.left + zone.width / 2;
+  const cy = zone.top + zone.height / 2;
+  return {
+    toCanvas: (p) => ({ x: cx + (sign * p.x) / metersPerPx, y: cy - (p.y - centerY) / metersPerPx }),
+    toWorld: (x, y, z) => new Vector3(sign * (x - cx) * metersPerPx, centerY - (y - cy) * metersPerPx, z),
+  };
 }

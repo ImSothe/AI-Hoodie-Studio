@@ -140,7 +140,7 @@ function ElementList() {
     return (
       <Section title="Piezas" index="01">
         <p className="font-editorial text-[14px] leading-relaxed font-light text-muted italic">
-          Esta cara aún no tiene piezas. Genere un motivo o componga una tipografía.
+          Aún no hay piezas en esta cara. Añádalas en el paso 1 · Diseño.
         </p>
       </Section>
     );
@@ -174,7 +174,7 @@ function ElementList() {
           </li>
         ))}
       </ol>
-      <p className="mt-3 text-[10.5px] font-light text-muted">Seleccione una pieza para editar su ficha.</p>
+      <p className="mt-3 text-[10.5px] font-light text-muted">Toque una pieza para ajustarla, o pulse sobre ella en la prenda.</p>
     </Section>
   );
 }
@@ -207,7 +207,7 @@ export function ElementPanel() {
           </div>
         )}
       </div>
-      <Section title="Técnica de aplicación">
+      <Section title="Cómo se aplica">
         <TechniquePicker value={technique} />
       </Section>
       <TonalOptions />

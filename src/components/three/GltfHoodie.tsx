@@ -9,6 +9,7 @@ import { useStudio } from '@/lib/store';
 import { useCalibration } from '@/lib/three/calibration';
 import { buildDecalPatches, computeProjector } from '@/lib/three/decalPlacement';
 import { fabricAlbedo } from '@/lib/three/fabricShading';
+import { setGarmentRoot } from '@/lib/three/garmentRegistry';
 import { knitNormalMap } from '@/lib/three/fabricTexture';
 import { FABRIC_MATERIAL, GLB_RECOLOR, GLB_TARGET_HEIGHT, HEM_Y, MODEL_HPS_Y } from '@/lib/three/modelConfig';
 import { Hardware } from './Hardware';
@@ -87,6 +88,12 @@ export function GltfHoodie({ url, textures }: { url: string; textures: DesignTex
       if (s.garmentColor !== prev.garmentColor) apply(s.garmentColor);
     });
   }, [materials]);
+
+  // El modelo queda accesible para la edición directa (arrastrar gráficos sobre la prenda).
+  useEffect(() => {
+    setGarmentRoot(root);
+    return () => setGarmentRoot(null);
+  }, [root]);
 
   // Un proyector por cara y un parche de decal por panel del tejido.
   const projections = useMemo(

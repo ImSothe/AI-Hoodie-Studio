@@ -7,6 +7,7 @@ import { useStudio } from '@/lib/store';
 import { MODEL_URL } from '@/lib/three/modelConfig';
 import type { StageMood } from '@/lib/three/stage';
 import { CameraRig } from './CameraRig';
+import { DirectEdit } from './DirectEdit';
 import { GltfHoodie } from './GltfHoodie';
 import { ProductLighting, ProductShadows } from './ProductLighting';
 import { useDesignTextures } from './useDesignTextures';
@@ -37,18 +38,22 @@ interface HoodieSceneProps {
   onInteract?: () => void;
   /** Distancia del plano de detalle. */
   detailDistance?: number;
+  /** Permite mover los gráficos arrastrándolos sobre la prenda (atelier). */
+  directEdit?: boolean;
 }
 
 /** Contenido del <Canvas>: estudio, sudadera GLB con los decals en vivo y cámara. */
 export function HoodieScene({
   frameOffsetPx = 0,
-  mood = 'nuit',
+  mood,
   immersive = true,
   autoRotate = false,
   onInteract,
   detailDistance,
+  directEdit = false,
 }: HoodieSceneProps) {
   const textures = useDesignTextures();
+  const stageMood = useStudio((s) => s.stageMood);
   const setImmersive = useStudio((s) => s.setImmersive);
   const restore = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -66,11 +71,11 @@ export function HoodieScene({
 
   return (
     <>
-      <ProductLighting mood={mood} />
+      <ProductLighting mood={mood ?? stageMood} />
       <Suspense fallback={null}>
         <GltfHoodie url={MODEL_URL} textures={textures} />
       </Suspense>
-      <ProductShadows mood={mood} />
+      <ProductShadows mood={mood ?? stageMood} />
       <OrbitControls
         makeDefault
         enablePan={false}
@@ -81,6 +86,7 @@ export function HoodieScene({
         onStart={onStart}
         onEnd={onEnd}
       />
+      {directEdit && <DirectEdit />}
       <CameraRig detailDistance={detailDistance} />
       <FrameOffset px={frameOffsetPx} />
     </>

@@ -1,7 +1,5 @@
 'use client';
 
-import { useRef } from 'react';
-import { importFiles } from '@/lib/assets/importFiles';
 import { addAssetToCanvas } from '@/lib/fabric/editor';
 import { getCanvas } from '@/lib/fabric/registry';
 import { useStudio } from '@/lib/store';
@@ -12,45 +10,22 @@ import { Section } from '../ui/Section';
 async function placeOnActiveCanvas(asset: GeneratedAsset) {
   const { activeView } = useStudio.getState();
   const canvas = getCanvas(activeView);
-  if (canvas) await addAssetToCanvas(canvas, activeView, asset);
+  if (canvas) {
+    await addAssetToCanvas(canvas, activeView, asset);
+    useStudio.getState().setSidebarTab('element');
+  }
 }
 
 /** Biblioteca de motivos generados o subidos: se arrastran al lienzo o al 3D. */
 export function AssetGallery() {
   const assets = useStudio((s) => s.assets);
   const removeAsset = useStudio((s) => s.removeAsset);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   return (
-    <Section
-      title="Biblioteca"
-      index="04"
-      aside={
-        <>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="border-b border-muted pb-0.5 text-[9px] tracking-[0.22em] text-muted uppercase hover:text-fg"
-          >
-            Subir SVG / PNG
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".svg,image/svg+xml,image/png,image/webp,image/jpeg"
-            multiple
-            hidden
-            onChange={async (e) => {
-              if (e.target.files?.length) useStudio.getState().addAssets(await importFiles(e.target.files));
-              e.target.value = '';
-            }}
-          />
-        </>
-      }
-    >
+    <Section title="Biblioteca">
       {assets.length === 0 ? (
         <p className="border-l border-line pl-3 font-editorial text-[13px] leading-snug font-light text-muted italic">
-          Genere un motivo o suba un SVG / PNG; después arrástrelo al lienzo o al visor 3D.
+          Aquí aparecerán sus motivos. Toque uno para colocarlo en la prenda o arrástrelo sobre ella.
         </p>
       ) : (
         <ul className="grid grid-cols-3 gap-3">
@@ -62,8 +37,8 @@ export function AssetGallery() {
                   e.dataTransfer.setData(ASSET_DRAG_MIME, asset.id);
                   e.dataTransfer.effectAllowed = 'copy';
                 }}
-                onDoubleClick={() => void placeOnActiveCanvas(asset)}
-                title={`${asset.name}\nArrastre al lienzo o al 3D, o doble clic${asset.revisedPrompt ? `\n\nDALL·E: ${asset.revisedPrompt}` : ''}`}
+                onClick={() => void placeOnActiveCanvas(asset)}
+                title={`${asset.name}\nToque para colocar, o arrastre sobre la prenda${asset.revisedPrompt ? `\n\nDALL·E: ${asset.revisedPrompt}` : ''}`}
                 className="checker aspect-square cursor-grab overflow-hidden border border-line p-2 transition duration-300 hover:border-fg/40 active:cursor-grabbing"
               >
                 <img src={asset.src} alt={asset.name} draggable={false} className="h-full w-full object-contain" />

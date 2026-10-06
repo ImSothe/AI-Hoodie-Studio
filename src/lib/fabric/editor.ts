@@ -578,6 +578,11 @@ function commit(canvas: Canvas, view: HoodieView, obj?: FabricObject) {
   syncCanvasState(canvas, view);
 }
 
+/** Aplica un cambio hecho directamente sobre un objeto (mover, escalar, girar) y avisa al 3D. */
+export function commitObject(canvas: Canvas, view: HoodieView, obj: FabricObject) {
+  commit(canvas, view, obj);
+}
+
 export function centerActive(canvas: Canvas, view: HoodieView, axis: 'x' | 'y' | 'both') {
   const obj = canvas.getActiveObject();
   if (!obj) return;

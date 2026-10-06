@@ -199,14 +199,14 @@ export async function removeFakeCheckerboard(src: string): Promise<string | null
   if (!checker || !borderFollowsPattern(checker, px, w, h)) return null;
 
   const { size } = checker;
+  const mask = new Uint8Array(w * h); // 1 = fondo (pasa a transparente)
+  const seeds: number[] = [];
   let cleared = 0;
-  // Cada casilla (con sus límites reales: la primera y la última pueden ser parciales).
-  const firstCellW = checker.firstX;
-  const firstCellH = checker.firstY;
+  // 1) Casillas donde predomina el fondo (con sus límites reales: la primera y la última pueden ser parciales).
   for (let y0 = 0, cy = 0; y0 < h; cy++) {
-    const ch = Math.min(cy === 0 ? firstCellH : size, h - y0);
+    const ch = Math.min(cy === 0 ? checker.firstY : size, h - y0);
     for (let x0 = 0, cx = 0; x0 < w; cx++) {
-      const cw = Math.min(cx === 0 ? firstCellW : size, w - x0);
+      const cw = Math.min(cx === 0 ? checker.firstX : size, w - x0);
       const expected = (cx + cy) & 1;
       let bg = 0;
       for (let y = y0; y < y0 + ch; y++) {
@@ -215,9 +215,9 @@ export async function removeFakeCheckerboard(src: string): Promise<string | null
       if (bg / (cw * ch) >= MIN_CELL_BACKGROUND) {
         for (let y = y0; y < y0 + ch; y++) {
           for (let x = x0; x < x0 + cw; x++) {
-            const i = (y * w + x) * 4;
-            if (isBackground(checker, px, i, expected)) {
-              px[i + 3] = 0;
+            if (isBackground(checker, px, (y * w + x) * 4, expected)) {
+              mask[y * w + x] = 1;
+              seeds.push(y * w + x);
               cleared++;
             }
           }
@@ -227,6 +227,26 @@ export async function removeFakeCheckerboard(src: string): Promise<string | null
     }
     y0 += ch;
   }
+  // 2) El fondo que toca el dibujo (casillas cortadas por un trazo) se limpia por contigüidad:
+  //    se expande desde lo ya limpio sólo por píxeles que coinciden con el tono de su casilla.
+  for (let q = 0; q < seeds.length; q++) {
+    const p = seeds[q];
+    const x = p % w;
+    const y = (p - x) / w;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const n = ny * w + nx;
+        if (mask[n] || !isBackground(checker, px, n * 4, cellClass(checker, nx, ny))) continue;
+        mask[n] = 1;
+        seeds.push(n);
+        cleared++;
+      }
+    }
+  }
+  for (let p = 0; p < mask.length; p++) if (mask[p]) px[p * 4 + 3] = 0;
   if (cleared < w * h * 0.02) return null; // casi nada que limpiar: no merece la pena tocarla
 
   ctx.putImageData(data, 0, 0);

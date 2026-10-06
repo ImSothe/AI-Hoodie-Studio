@@ -11,6 +11,7 @@ import {
 } from './hoodie/spec';
 import { DEFAULT_COLLECTION_STYLE, type CollectionStyleId } from './ai/prompt';
 import type { ElementSummary, SelectionStyle } from './fabric/editor';
+import type { StageMood } from './three/stage';
 import type { AIProvider, GeneratedAsset, PlacementMetrics } from './types';
 
 /** Color por defecto de la prenda (negro de colección). */
@@ -51,6 +52,8 @@ interface StudioState {
   hardware: HardwareSpec;
   /** El usuario está manipulando el 3D: la interfaz se retira para dar protagonismo a la prenda. */
   immersive: boolean;
+  /** Ambiente del escenario 3D del atelier: estudio oscuro (nuit) o sala clara (salon). */
+  stageMood: StageMood;
   /** Captura del visor 3D para incluir en el Tech Pack. */
   snapshot3d: string | null;
 
@@ -77,6 +80,7 @@ interface StudioState {
   setFabric: (patch: Partial<FabricSpec>) => void;
   setHardware: (patch: Partial<HardwareSpec>) => void;
   setImmersive: (value: boolean) => void;
+  setStageMood: (mood: StageMood) => void;
   setSnapshot3d: (dataUrl: string | null) => void;
 }
 
@@ -104,6 +108,7 @@ export const useStudio = create<StudioState>((set) => ({
   fabric: DEFAULT_FABRIC,
   hardware: DEFAULT_HARDWARE,
   immersive: false,
+  stageMood: 'nuit',
   snapshot3d: null,
 
   // Al cambiar de cara se limpia la selección (el lienzo oculto la descarta);
@@ -136,5 +141,6 @@ export const useStudio = create<StudioState>((set) => ({
   setFabric: (patch) => set((s) => ({ fabric: { ...s.fabric, ...patch } })),
   setHardware: (patch) => set((s) => ({ hardware: { ...s.hardware, ...patch } })),
   setImmersive: (immersive) => set((s) => (s.immersive === immersive ? {} : { immersive })),
+  setStageMood: (stageMood) => set({ stageMood }),
   setSnapshot3d: (snapshot3d) => set({ snapshot3d }),
 }));

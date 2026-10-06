@@ -19,6 +19,8 @@ export function TextileCanvas() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [dragOver, setDragOver] = useState(false);
+  // El lienzo 2D es el editor avanzado: la edición normal se hace directamente sobre la prenda 3D.
+  const [open, setOpen] = useState(false);
   const activeView = useStudio((s) => s.activeView);
   const counts = useStudio((s) => s.designCounts);
   const focusView = useStudio((s) => s.focusView);
@@ -82,9 +84,9 @@ export function TextileCanvas() {
   };
 
   return (
-    <section className="border-b border-line px-6 pt-5 pb-4">
-      <header className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="label-tech text-fg">Lienzo</h2>
+    <section className={open ? 'border-b border-line px-6 pt-5 pb-4' : 'border-b border-line px-6 py-3'}>
+      <header className={open ? 'mb-3 flex items-baseline justify-between gap-2' : 'flex items-baseline justify-between gap-2'}>
+        <h2 className="label-tech text-fg">Lienzo 2D</h2>
         <Segmented<HoodieView>
           label="Cara de la prenda"
           value={activeView}
@@ -94,11 +96,20 @@ export function TextileCanvas() {
             label: `${VIEW_SPECS[v].label}${counts[v] ? ` ${counts[v]}` : ''}`,
           }))}
         />
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="border-b border-muted pb-0.5 text-[9px] tracking-[0.22em] text-muted uppercase hover:text-fg"
+        >
+          {open ? 'Ocultar' : 'Mostrar'}
+        </button>
       </header>
 
       <div
         ref={wrapRef}
-        className="relative"
+        className={open ? 'relative' : 'pointer-events-none fixed top-0 -left-[3000px] w-[340px]'}
+        aria-hidden={!open}
         style={{ minHeight: box.height || undefined }}
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes(ASSET_DRAG_MIME) && !e.dataTransfer.types.includes('Files')) return;
@@ -120,9 +131,11 @@ export function TextileCanvas() {
           </div>
         )}
       </div>
-      <p className="mt-2.5 text-[10px] font-light tracking-[0.06em] text-muted">
-        Arrastrar · escalar · girar — la prenda responde en tiempo real
-      </p>
+      {open && (
+        <p className="mt-2.5 text-[10px] font-light tracking-[0.06em] text-muted">
+          Editor avanzado: lo que haga aquí se ve al instante en la prenda.
+        </p>
+      )}
     </section>
   );
 }

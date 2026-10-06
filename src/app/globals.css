@@ -83,6 +83,18 @@ body {
     radial-gradient(ellipse 60% 70% at 58% 42%, #181818 0%, var(--color-stage) 60%, #101010 100%);
 }
 
+/*
+ * Escenario claro («salon»): sala cálida de producto. Sólo cambia lo que hay
+ * dentro del visor; el panel de atelier sigue siendo negro.
+ */
+.stage-bg[data-mood='salon'] {
+  --color-fg: #141414;
+  --color-muted: #6c6964;
+  --color-line: rgba(20, 20, 20, 0.16);
+  background: radial-gradient(ellipse 60% 70% at 58% 42%, #f2f0ec 0%, #eceae6 60%, #e2dfda 100%);
+  color: #141414;
+}
+
 /* Panel flotante: negro casi opaco, separado del escenario por un filete blanco al 10 % */
 .glass {
   background: rgba(0, 0, 0, 0.94);
