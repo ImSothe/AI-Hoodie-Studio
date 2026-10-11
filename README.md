@@ -1,267 +1,220 @@
 # AI Hoodie Studio
 
-Atelier digital de **lujo silencioso** para diseñar sudaderas con IA y compilar un **dossier de taller de alta costura** listo para producción. Dirección de arte monocroma (negro, grafito, marfil), tipografía de pasarela y el modelo 3D como protagonista absoluto.
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![React](https://img.shields.io/badge/React-19-61dafb)
+![three.js](https://img.shields.io/badge/three.js-r186-black)
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ ┌────────────────┐   FW26 | AHS-FW26-001                                 │
-│ │ PANEL FLOTANTE │   NOCTURNE                       [Calibrar][Capturar] │
-│ │ (negro, filete │   Felpa perchada 460 g/m²  ·  #0B0B0B                 │
-│ │  blanco 10 %)  │                                                       │
-│ │ Lienzo textil ─┼──▶ <Decal> en vivo sobre public/models/hoodie.glb     │
-│ │ ────────────── │                                                       │
-│ │ Generar  Texto │      VISOR 3D A SANGRE (gris estudio #141414)         │
-│ │ Prenda   Pieza │                                                       │
-│ │ Dossier        │                                                       │
-│ └────────────────┘   FRENTE | ESPALDA | LAT. DER. | LAT. IZQ. | DETALLE  │
-└──────────────────────────────────────────────────────────────────────────┘
-  Al orbitar la prenda, cabecera y cámaras se desvanecen y el panel queda casi
-  invisible (6 %); vuelve al pasar el ratón o 0,9 s después de soltar.
-```
+A digital atelier to **design hoodies with AI** and produce a **production-ready workshop dossier**. You place graphics on a 3D garment, choose how each piece is made (screen print, reflective ink, 3D embroidery, tone-on-tone embroidery), and export a tech-pack PDF with vector dimensions plus one file per technique.
 
-## Empezar en dos minutos
+It also includes a **workshop configurator** that turns choices (fabric, personalization, placement, quantities per size) into a numbered **work order**.
 
-1. **Arrancar:** doble clic en `Iniciar-Atelier.bat` (compila y abre `http://localhost:3000`). Para tocar el código usa `Iniciar-Atelier-Desarrollo.bat`. Necesita tu modelo en `public\models\hoodie.glb`.
-2. **Añadir un diseño** (barra «Añadir» a la izquierda del visor, o el paso 1 del panel): subir una imagen (también se puede soltar sobre la prenda), una plantilla, un texto o crear un motivo con IA (en «+ IA» se pega la clave de OpenAI una vez).
-3. **Moverlo directamente sobre la prenda:** pulsar el diseño, arrastrar; las esquinas cambian el tamaño y el círculo superior lo gira.
-4. **Darle estilo** (paso 3 «Ajustar»): *Estilos rápidos* de un toque (plata, cromo, oro bordado, neón…), color liso o degradado, y acabado: estampado, reflectante, bordado en relieve o tono sobre tono.
-5. **Tratar una zona aparte** (por ejemplo las alas de un dragón): botón **Partes** → pintar la zona → «Separar parte». Cada parte tiene su propio color, degradado y acabado.
-6. **Entregar** (paso 4): dossier PDF de taller y archivos por técnica.
+> **Open source.** This project is released under the [MIT license](LICENSE). Use it, modify it, build on it, even commercially. No permission needed, no warranty given. If it is useful to you, a star or a mention is appreciated but not required.
 
-**Manual de usuario completo:** [docs/MANUAL-USUARIO.md](docs/MANUAL-USUARIO.md), también dentro de la app en `/ayuda` (enlace «Ayuda» en el panel).
+<p align="center">
+  <img src="public/manual/resultado.webp" alt="The atelier: a hoodie with two graphic pieces, each with its own technique" width="900"><br>
+  <em>The atelier. Each graphic is a separate piece with its own colour and technique, projected live onto the 3D garment.</em>
+</p>
 
-En el visor: *Fondo claro/oscuro*, *Fija/Girando* (la prenda gira sola mientras no se edita), *Modelo limpio/Con detalles* (cordones, cremalleras y puntadas del GLB) y *Calibrar* (ajustar el modelo a la escala real).
+<p align="center">
+  <img src="public/manual/configurador.webp" alt="The workshop configurator" width="900"><br>
+  <em>The workshop configurator: fabric, personalization, placement and quantities become a work order.</em>
+</p>
 
-## Stack
+> **Language note.** The app's interface and its built-in user manual are in **Spanish**. This README is in English; the original, more detailed Spanish README is kept as [README.es.md](README.es.md). Translations and an i18n layer would be welcome contributions.
 
-| Capa | Tecnología |
-| --- | --- |
-| Framework | Next.js 16 (App Router) + React 19 + TypeScript |
-| Lienzo 2D | Fabric.js 7 |
-| 3D | three.js + @react-three/fiber 9 + @react-three/drei 10 |
-| Estado | zustand |
-| IA | OpenAI DALL·E 3 (key del usuario en localStorage o del servidor) · Recraft v3 como alternativa vectorial |
-| Exportación | jsPDF (dossier de taller con cotas vectoriales) + JSZip (paquete) |
-| Color | react-colorful (`HexColorPicker` + `HexColorInput`) |
-| Tipografías | @fontsource autoalojadas: Inter 200–400, Bodoni Moda, Cormorant Garamond, IBM Plex Mono · Helvetica Neue de sistema |
-| Estilos | Tailwind CSS 4 (tokens en `@theme`) |
+---
 
-## Dirección de arte: lujo silencioso
+## Contents
 
-| Elemento | Decisión |
-| --- | --- |
-| Paleta | Monocroma: escenario 3D gris estudio `#141414` (nunca negro puro), panel negro `#000000` separado por un filete blanco al 10 %, filetes interiores `#2A2A2A`, texto principal blanco hueso `#EDEDED` (≈ 15:1) y secundario gris medio `#A0A0A0` (≈ 7:1); acento único `#F5F5F5`. |
-| Tipografía UI | Inter 200–300 en versalitas diminutas con tracking muy amplio (0,22–0,42 em) para rótulos; **Bodoni Moda** (didona) para el nombre del modelo; Cormorant Garamond en cursiva para notas editoriales; IBM Plex Mono 300 para cifras tabulares (mm, HEX, códigos). |
-| Superficies | Esquinas rectas, filetes de 1 px, panel de cristal (`backdrop-blur`) flotando sobre la escena; iconos reducidos a trazo 1,15. |
-| Luz de estudio | Iluminación de configurador real (`ProductLighting`): un estudio de **softboxes generado en local** con `Lightformer` de drei (cenital, llave, relleno, dos tiras de contraluz y rebote del suelo; sin descargar HDRIs) que da la luz difusa y los reflejos, más llave y **contraluces direccionales** que recortan la silueta. Todo el estudio gira con el azimut de la cámara, así la prenda queda igual de bien iluminada desde cualquier vista. Tone mapping **Khronos PBR Neutral** (el estándar de e-commerce: no altera el color del tejido), sombra de contacto en dos capas y tejido con **punto de felpa** (normal map procedural, o el del GLB si lo trae). Ningún tejido devuelve menos de ~3 % de la luz: se aplica ese suelo de albedo a la prenda y a los decals, así un negro se ve con volumen y el ton-sur-ton sigue casando con el tejido. |
-| Modo inmersivo | Al empezar a orbitar (`OrbitControls.onStart`) la interfaz se retira: cabecera y barra de cámaras a opacidad 0, panel al 6 %. Vuelve al pasar el ratón por el panel o 900 ms después de soltar. |
-| Encuadre | Canvas a sangre con `camera.setViewOffset`: la prenda se centra en el espacio libre a la derecha del panel, no detrás de él. |
-| Fichas | Los paneles se leen como una ficha técnica de autor: índices editoriales (01, 02…), códigos de pieza (`F·01`, `B·02`), calibres en mm y referencias de tinta/hilo. |
+1. [What it does](#what-it-does)
+2. [How it works](#how-it-works)
+3. [Getting started](#getting-started)
+4. [You must bring your own 3D model](#you-must-bring-your-own-3d-model)
+5. [AI generation and API keys](#ai-generation-and-api-keys)
+6. [The four tools](#the-four-tools)
+7. [Production techniques](#production-techniques)
+8. [The workshop dossier and work order](#the-workshop-dossier-and-work-order)
+9. [Tech stack](#tech-stack)
+10. [Project structure](#project-structure)
+11. [Status and known limitations](#status-and-known-limitations)
+12. [License and credits](#license-and-credits)
 
-## Configurador de taller (`/configurador`)
+---
 
-El **atelier** (`/`) es donde se diseña: IA, lienzo libre, técnicas, fornituras y dossier. El **configurador de taller** es la herramienta para producir variantes del modelo sin tocar el lienzo: se elige sobre la prenda en 3D, con la luz de estudio, y sale una **orden de taller** lista para producción. No es una tienda: no hay precios ni cesta.
+## What it does
 
-| Paso | Qué se define |
-| --- | --- |
-| 01 Tejido | Color de tejido en stock (la prenda gira sola en el plató hasta que se toca) y ficha del tejido: construcción, gramaje, composición y acabado. |
-| 02 Personalización | Iniciales o palabra, tipografía (Bodoni Moda, Cormorant Garamond, Helvetica Neue) y técnica con su código: **BTT** bordado tono sobre tono, **BAR** bordado en relieve o **SER** serigrafía, con hilo o tinta y su referencia (`BAR-C9B37E`). Sin texto, la orden es de prenda lisa. |
-| 03 Colocación | Corazón, pecho, nuca o espalda, cada una con su caja y cota en mm desde el HPS; tras aplicar se muestran el **calibre real** y las **coordenadas** medidas sobre el lienzo. |
-| 04 Cantidades | Unidades por talla (XS–XXL). Las colocaciones se refieren a la talla M; el taller escala con su tabla de gradación. |
-| 05 Orden | Número de orden (`OT-AAMMDD-XXX`), variante (`NOC-NOIR-BTT-HEART`), técnica, colocación, producción y desglose por tallas. |
+- **Design with AI**: type a concept and generate artwork with DALL·E 3 (or Recraft v3 for pure vector SVG). Three "collection directions" steer the style: *Silent luxury* (default), *Technical archive* and *Gothic*.
+- **Edit directly on the garment**: select a graphic on the 3D hoodie, drag it, resize it from the corners, rotate it with the handle. Every change is live in 3D.
+- **Per-piece finishes**: each piece has its own colour or two-colour gradient and its own technique. Nine one-tap "quick looks" (silver, chrome, embroidered gold, neon...).
+- **Split a graphic into parts**: paint a mask (brush, eraser, wand, rectangle, circle, triangle, polygon) and separate a zone, for example one wing embroidered and the other reflective.
+- **Crop and duplicate**: crop copies to a rectangle (text on top, drawing below...). Each crop becomes an independent piece in the dossier.
+- **Undo / redo** (Ctrl+Z / Ctrl+Y) per garment face, 40 steps.
+- **Garment options**: fabric colour, fabric sheet (construction, weight, composition, finish), hardware (eyelets, aglets, drawcord).
+- **Export**: a PDF workshop dossier with vector dimensions, and a ZIP with one file per technique (SVG / 300 dpi PNG).
+- **All-over pattern mode** (`/patron`, in development): place a design across the flat pattern pieces and see it sewn on the 3D garment.
+- **Workshop configurator** (`/configurador`): produce garment variants and a numbered work order.
 
-- **Producción en vivo**: el pie del panel muestra unidades, técnica y, en bordados, las **puntadas estimadas por pieza**. Se calculan con la superficie real que cubre el hilo (píxeles opacos del render de la pieza) y una densidad de taller (3 pt/mm² en satén, 3,6 en relieve). Es una estimación para planificar máquina: el número real lo da el archivo digitalizado.
-- **Emitir orden de taller** descarga el dossier con el número de OT: portada con el render de la pieza entera, lámina de colocación con cotas, materiales y fornituras, **orden de producción por tallas** y archivos por técnica (SVG / PNG 300 dpi).
-- **Ambientes**: *Salon* (sala clara cálida) y *Nuit* (estudio gris oscuro). Cambian el plató 3D y la paleta del panel.
-- **Catálogo del taller**: `src/lib/configurator/collection.ts`: modelo, colores en stock, técnicas, hilos, tipografías, colocaciones homologadas y tallas.
-- **Mismo motor que el atelier**: la personalización se aplica como `fabric.IText` en lienzos de diseño fuera de pantalla, así los decals, el ton-sur-ton y el dossier son exactamente los mismos.
+## How it works
 
-## Arranque rápido
+The core idea is a **2D design canvas that drives a 3D preview**.
+
+1. **Each garment face has a 2D canvas** built with Fabric.js. Images, text and templates are Fabric objects. A piece's technique and ink are stored as data on the object.
+2. **The canvas becomes textures.** One texture per technique is filtered out of the same Fabric canvas (screen print, reflective, embroidery) and used to texture a decal.
+3. **Decals are projected, not UV-mapped.** The graphic is projected onto the hoodie mesh using drei's `<Decal>`, with the position and scale computed by raycasting onto the surface. Because it does not rely on the model's UVs, **any GLB hoodie works** regardless of how it was unwrapped. The projection is split into one patch per fabric panel, so a graphic crosses seams, sleeves and the hood cleanly. Each face prints only on its own half of the garment and does not stretch at the sides.
+4. **Each technique has its own material.** Matte for screen print; a physical material with clear coat and metalness for reflective ink; a sheen plus a generated bump map for 3D embroidery; and for tone-on-tone embroidery the thread follows the fabric colour, revealing itself only through relief and gloss under raking light.
+5. **Direct editing inverts the projection.** Selecting and dragging on the 3D garment uses the exact inverse of the projection to find the matching spot on the 2D canvas.
+6. **Real-world units.** The canvas uses `7 px = 1 cm`. All measurements in the dossier are in millimetres from the **HPS** (high point shoulder), the usual garment-industry origin. The recommended print area is 38 x 48 cm on the back (10 cm below the HPS) and 30 x 24 cm on the front (15 cm below the HPS), but the whole garment is editable.
+7. **Production output is computed, not drawn.** The PDF is built with jsPDF from the same Fabric objects, so the drawings and dimensions always match what you see. Estimated stitch counts come from the real area covered by thread (the opaque pixels of each piece's render) times a workshop density (3 stitches/mm² for satin, 3.6 for relief).
+8. **Lighting is built for products.** A procedurally generated softbox studio (no HDRI downloads), directional rim lights to cut the silhouette, Khronos PBR Neutral tone mapping (the e-commerce standard, which does not shift fabric colour), and a procedural brushed-fleece normal map.
+
+## Getting started
+
+Requirements: **Node.js 20.9 or newer** and npm.
 
 ```bash
+git clone https://github.com/ImSothe/AI-Hoodie-Studio.git
+cd AI-Hoodie-Studio
 npm install
-# 1. Copia tu modelo 3D (obligatorio):
-cp /ruta/a/tu/hoodie.glb public/models/hoodie.glb
-npm run dev                  # http://localhost:3000
-# 2. En la app: Generar → Configuración → pega tu OpenAI API Key
+
+# 1. Add your 3D model (required, see the next section):
+cp /path/to/your/hoodie.glb public/models/hoodie.glb
+
+# 2. Run it:
+npm run dev        # http://localhost:3000
 ```
 
-No hay modo demo ni modelo de reserva:
+On Windows you can also double-click `Iniciar-Atelier.bat` (builds and opens the app) or `Iniciar-Atelier-Desarrollo.bat` (development mode with live reload).
 
-- **Sin `public/models/hoodie.glb`** el visor muestra un aviso a pantalla completa: *«Falta el archivo 3D. Sube tu hoodie.glb a public/models/»*. Ver `public/models/README.md` (orientación +Z, calibración del HPS).
-- **Sin API key** el botón de generar queda desactivado hasta que pegues tu key en *Configuración*.
+| Script | What it does |
+|---|---|
+| `npm run dev` | Development server (picks up a new GLB when you click "Reintentar") |
+| `npm run build` | Production build, including the type check. Rebuild after changing the GLB |
+| `npm start` | Serves the production build |
+| `npm run typecheck` | TypeScript only |
+| `npm run fonts:pdf` | Regenerates the PDF fonts from the `@fontsource` WOFF files (only if you change the PDF fonts) |
 
-| Script | Qué hace |
-| --- | --- |
-| `npm run dev` | Servidor de desarrollo (detecta un GLB nuevo con «Reintentar») |
-| `npm run build` | Build de producción (incluye typecheck). Rehazlo si cambias el GLB |
-| `npm run typecheck` | Sólo TypeScript |
-| `npm run fonts:pdf` | Regenera las TTF del dossier (`public/fonts/pdf/`) desde los WOFF de @fontsource |
+## You must bring your own 3D model
 
-### API keys
+The viewer always loads `public/models/hoodie.glb`. **No model is included** and there is no demo mode or fallback: without the file, the viewer shows a full-screen notice asking for it.
 
-| Origen | Uso |
-| --- | --- |
-| **Configuración** (app) | La OpenAI API Key se guarda en el `localStorage` del navegador y viaja en la cabecera `x-openai-key` a `/api/generate`, que llama a DALL·E 3 y no la guarda ni la registra. |
-| `OPENAI_API_KEY` (`.env.local`) | Key del servidor, usada si el usuario no ha pegado la suya. |
-| `RECRAFT_API_KEY` (`.env.local`) | Alternativa vectorial (SVG puro) si no hay ninguna key de OpenAI. |
+- Format: GLB (glTF 2.0 binary). If it uses Draco compression, drei downloads the decoder from its CDN.
+- Orientation: ideally facing **+Z** (the glTF convention). Otherwise use the in-app **Calibrate** panel (orientation, height, scale).
+- The model is normalized automatically: scaled to 0.84 m tall and centred.
+- Designs are projected with `<Decal>`, so the model's UV layout does not matter, **except** for the `/patron` all-over mode, which uses the UVs as the pattern.
+- Where to get a model: Sketchfab (filter "Downloadable"), CGTrader, TurboSquid, or export your own from CLO3D, Marvelous Designer or Blender.
 
-> ⚠️ localStorage es legible por cualquier script del mismo origen. Úsalo en local o en un dominio interno, y pon un **límite de gasto** a la key en OpenAI.
+**Check the model's licence** before using it commercially or publishing screenshots of it. See [public/models/README.md](public/models/README.md) (in Spanish) for the calibration details.
 
-### Direcciones de colección
+## AI generation and API keys
 
-Cada concepto se envía a la IA con el estilo de la **dirección de colección** elegida en *Generar* (se añade también en inglés porque DALL·E 3 lo sigue mejor). Todas piden blanco sobre negro puro para recortar el fondo sin pérdidas:
+AI generation is **optional**. Without a key the Generate button is disabled, and everything else (uploading images, templates, text, all editing, export and the configurator) works normally.
 
-| Código | Dirección | Estilo añadido al concepto |
-| --- | --- | --- |
-| `LS` | **Lujo silencioso** (por defecto) | *diseño aislado en blanco sobre fondo negro puro, emblema minimalista de casa de alta costura, trazo fino y constante, geometría precisa, mucho espacio negativo, sin sombras, flat vector* |
-| `AT` | Archivo técnico | *… dibujo técnico de línea fina tipo plano de ingeniería o lámina botánica de archivo, trazo uniforme …* |
-| `TG` | Tatuaje tribal gótico | *diseño aislado en blanco sobre fondo negro puro, estilo tatuaje tribal gótico, streetwear, sin sombras, flat vector* (la especificación original, intacta) |
+| Where | What |
+|---|---|
+| **Settings** in the app | Paste your OpenAI API key. It is saved in your browser's `localStorage` and sent in the `x-openai-key` header to `/api/generate`, which calls DALL·E 3 and neither stores nor logs it. |
+| `OPENAI_API_KEY` in `.env.local` | A server-side key, used when the user has not pasted their own. |
+| `RECRAFT_API_KEY` in `.env.local` | An alternative that returns pure vector SVG, used when no OpenAI key exists. |
 
-Cada dirección trae sus propios conceptos de ejemplo. Opciones: formato **vertical 1024×1792** (espalda) o cuadrado, 1–4 variaciones y calidad HD. El panel muestra el coste aproximado. La API acepta `style: 'silence' | 'archive' | 'gothic'` y rechaza cualquier otro valor.
+Copy `.env.example` to `.env.local` if you want server-side keys. `.env*` files are git-ignored.
 
-## Flujo de uso
+**Image generation is a paid API.** DALL·E 3 charges per image (the app shows an approximate cost). Set a spending limit on your key.
 
-1. **Configurar**: pega tu OpenAI API Key (una sola vez por navegador).
-2. **Generar**: elige la dirección de colección, escribe un concepto (p. ej. `llave antigua estilizada`) y pulsa *Generar con DALL·E 3*.
-3. **Ajustar en el lienzo textil** (panel izquierdo): mueve, escala y gira con el bounding-box; snapping al eje central y al centro del área. Cada cambio se ve **en tiempo real en el 3D**. También puedes soltar assets directamente sobre el visor 3D. En *Pieza* fijas el ancho real en mm, centras, volteas, duplicas u ordenas capas. `Supr` borra, flechas mueven (`⇧` ×10).
-4. **Revisar en 3D** con la barra de cámaras: *Frente, Espalda, Lateral derecho, Lateral izquierdo, Detalle* (los laterales siguen el criterio de fábrica: lado de quien viste la prenda). *Capturar* guarda el render que abre la portada del dossier (sin el fondo de estudio, transparente, para recortarlo en la portada).
-5. **Compilar dossier** (pestaña *Dossier*): nombre, referencia de estilo y temporada; descarga el ZIP para el taller.
+> **Security note.** `localStorage` is readable by any script on the same origin, and the generation endpoint has **no rate limit** yet. Run it locally or on an internal domain, and do not expose it publicly with a server-side key.
 
-## Texto, color y técnicas por elemento
+The request body accepts `style: 'silence' | 'archive' | 'gothic'` and rejects anything else. Options include a vertical 1024x1792 format (for the back) or square, 1-4 variations, and HD quality. Every direction asks for white on pure black so the background can be cut out losslessly.
 
-| Pestaña | Qué hace |
-| --- | --- |
-| **Texto** | Composición tipográfica con fuentes de alta gama: **Helvetica Neue Light** (de sistema; donde no está instalada se previsualiza con Inter Light), Inter Extra Light, **Bodoni Moda** (didona de alta costura), Cormorant Garamond Light (romana editorial) e IBM Plex Mono Light (técnica). Añade un `fabric.IText` con tracking de pasarela; doble clic para editarlo letra a letra. Las fuentes se cargan con `document.fonts.load` antes de medir el texto. |
-| **Prenda** | 01 *Color del tejido* (`material.color` del GLB en tiempo real, template 2D y planos del dossier) · 02 *Tejido* (construcción, gramaje 380–500 g/m², composición, acabado) · 03 *Fornituras*: ojales metálicos a medida (acabado gunmetal, negro mate, paladio, níquel o latón; Ø 8/10/12 mm; distancia entre centros y altura bajo HPS), herretes (acabado y largo) y cordón (tipo, tono sobre tono o contraste). Los ojales se pintan también en 3D (`Hardware.tsx`), con material metálico y reflejos del entorno. |
-| **Pieza** | Ficha de autor de la pieza seleccionada: código (`B·02`), **técnica de aplicación**, referencia de tinta/hilo (`BTT-0B0B0B-SAT`), RGB / CMYK aprox., fuente, **color** (`HexColorPicker`) y calibres en mm. Sin selección muestra la lista de piezas de la cara. Al hacer clic en un objeto del lienzo se abre sola. |
+## The four tools
 
-**Color por elemento** — SVG: `fill`/`stroke` de todos sus paths · Texto: `fill` · PNG: `filters.BlendColor` en modo `tint` + `applyFilters()`.
+| Route | Purpose |
+|---|---|
+| `/` **Atelier** | Design: AI, free canvas, techniques per piece, hardware and the dossier. The main tool. Four steps: Design, Garment, Adjust, Deliver. |
+| `/configurador` **Workshop** | Produce variants without touching the canvas: fabric, personalization, placement, quantities by size, then a **work order**. A workshop tool, not a shop: no prices, no cart. |
+| `/patron` **Pattern** | All-over printing across the flat pattern pieces (in development). |
+| `/ayuda` **Manual** | An interactive user manual with a searchable side menu and zoomable screenshots, written in Spanish (`docs/MANUAL-USUARIO.md`). |
 
-**Técnica por elemento** — se guarda como custom data en el objeto de Fabric (`obj.set({ tecnica })`, incluida en `clone()`/`toObject()`):
+### The workshop configurator in five steps
 
-| Técnica | Representación 3D |
-| --- | --- |
-| Serigrafía Plana | `<Decal>` con `MeshStandardMaterial` mate |
-| Tinta Reflectante D3O/3M | `<Decal>` con `MeshPhysicalMaterial` (`roughness 0.1`, `metalness 0.8`, `clearcoat 1`, emissive del propio color) + entorno local `RoomEnvironment` |
-| Bordado Alto Relieve | `<Decal>` con `MeshPhysicalMaterial` con *sheen* de hilo y `bumpMap` generado en 2D: silueta desenfocada (acolchado) × patrón de puntadas |
-| Bordado Ton-sur-Ton (Tono sobre Tono) | Mismo `<Decal>` de bordado, pero el hilo **sigue al HEX del tejido** (exacto, o un matiz ±7 % casi imperceptible) y su acabado (satinado o mate) se pinta en un `roughnessMap` por píxel: el motivo apenas se ve de frente y aparece cuando la luz rasante toca el relieve y el brillo del hilo. |
+1. **Fabric**: stock colour and fabric sheet (construction, weight, composition, finish).
+2. **Personalization**: initials or a word, a typeface, and a technique with its code (embroidery tone-on-tone, relief embroidery or screen print) plus thread or ink reference. With no text the order is for a plain garment.
+3. **Placement**: heart, chest, nape or back, each with its box and dimensions in mm from the HPS, and the measured real size after applying.
+4. **Quantities**: units per size, XS to XXL. Placements refer to size M; the workshop scales with its own grading table.
+5. **Order**: order number (`OT-YYMMDD-XXX`), variant code, technique, placement, production and per-size breakdown.
 
-Cada cara tiene una textura por técnica (filtrada desde el mismo lienzo Fabric) y un `<Decal>` por técnica, montado sólo si se usa. Las dos técnicas de bordado comparten capa: su relieve (`bumpMap`) y su brillo (`roughnessMap`) se generan por pieza, de modo que una pieza ton-sur-ton mate y otra satinada conviven en la misma cara.
+The editable catalogue (model, stock colours, techniques, threads, typefaces, approved placements and sizes) lives in `src/lib/configurador/collection.ts`.
 
-**Ton-sur-ton y color de la prenda** — al pasar una pieza a ton-sur-ton se guarda su tinta anterior y se tiñe con el color del tejido; si después cambias el color de la prenda, el hilo lo sigue automáticamente. Al salir de ton-sur-ton recupera su tinta.
+## Production techniques
 
-## Dossier de taller (ZIP)
+| Code | Technique | 3D rendering |
+|---|---|---|
+| `SER` | Flat screen print | Decal with a matte standard material |
+| `REF` | Reflective ink | Decal with a physical material (low roughness, high metalness, clear coat) and a local environment |
+| `BAR` | Relief embroidery | Decal with thread sheen and a generated bump map (a blurred silhouette for padding times a stitch pattern) |
+| `BTT` | Tone-on-tone embroidery | Same decal, but the thread follows the fabric's hex (exact, or a barely visible +/-7% shade); satin or matte finish painted per pixel into a roughness map |
 
-```
-AHS-FW26-001_nocturne_dossier.zip
-├── dossier-technique.pdf   # Dossier de alta costura (A4, ver abajo)
-├── spec.json               # Formato máquina: styleCode, season, fabric, hardware, inks[], views[].elements[] (mm)
-├── render-3d.png           # (si se capturó en el visor)
-├── back/
-│   ├── artwork.svg         # Conjunto aislado, SVG con tamaño físico (width="32.40cm")
-│   ├── print-300dpi.png    # Raster transparente a 300 dpi (baja de dpi solo si supera 6000 px)
-│   ├── plano-tecnico.png   # Plano de la cara (prenda + arte) sobre blanco
-│   ├── serigrafia-plana/   # artwork.svg + print-300dpi.png sólo con las piezas de esa técnica
-│   ├── reflectante/
-│   ├── bordado-alto-relieve/   # base para digitalizar el bordado (DST/PES)
-│   └── bordado-ton-sur-ton/
-└── front/ …
-```
+Ink and thread references follow `CODE-HEX[-SAT|-MAT]`, for example `BTT-0B0B0B-SAT`. Pantone or Madeira matches are made at the workshop from a sample; CMYK values are approximate.
 
-**El PDF** se maqueta como un dossier de atelier: páginas blancas, filetes de 0,07–0,1 mm y **las mismas tipografías que la interfaz**, incrustadas (sólo los glifos usados): Bodoni Moda para títulos, Cormorant Garamond para nombres y notas, Inter para rótulos en versalitas con tracking real (jsPDF no lo considera al alinear, así que se calcula a mano) e IBM Plex Mono para cifras, códigos y rutas.
+When a piece is switched to tone-on-tone, its previous ink is remembered, and if you later change the garment colour the thread follows it automatically.
 
-> jsPDF sólo incrusta TrueType y @fontsource distribuye WOFF: `scripts/pdf-fonts.mjs` descomprime las tablas del WOFF y reescribe la cabecera sfnt (sin dependencias). Las TTF resultantes y sus licencias (SIL OFL 1.1) viven en `public/fonts/pdf/`. Si no se pudieran descargar, el dossier se compone con Times / Helvetica / Courier.
+## The workshop dossier and work order
 
-| Página | Contenido |
-| --- | --- |
-| Portada | Temporada · referencia de estilo, nombre del modelo en versalitas didonas, render 3D recortado (o los planos de las caras) y bloque de datos: dossier, fecha, tejido, gramaje, color, piezas. |
-| Planche por cara | Plano de colocación con **cotas vectoriales** de arquitecto (ancho, alto y HPS → borde superior), **reglas en mm** desde el HPS (vertical) y desde el eje (horizontal), área de impresión, eje central y línea HPS dibujados sobre la prenda (marfil sobre tejidos oscuros, tinta sobre claros). Ficha del conjunto, leyenda de trazos y **desglose de piezas**: código, pieza / fuente, técnica, calibre mm, **X desde el eje y Y bajo el HPS en mm**, rotación y referencia de tinta/hilo con muestra. Notas de taller por técnica (con **superficie bordada y puntadas estimadas** de cada pieza bordada) y archivos de producción. |
-| Materiales y fornituras | Tejido (construcción, **gramaje g/m² y oz/yd²**, composición, acabado, HEX / RGB / CMYK aprox.), tabla de **tintas e hilos** (referencia, muestra, técnica, HEX, RGB, CMYK, acabado y piezas que la usan), **fornituras** (ojales `OJ-GM-10`, herretes `HR-GM-30`, cordón `CR-R08-…` con acabado, calibre, cantidad y posición en mm) y casillas de visto bueno. Desde el configurador de taller añade la **orden de producción** con las unidades por talla. |
+The dossier is an A4 PDF with hairline rules (0.07 to 0.1 mm), vector dimensions, and coordinates in mm from the HPS. It contains:
 
-Las coordenadas toman como origen el **HPS sobre el eje central**: X = centro de la pieza (+ derecha mirando la prenda), Y = borde superior bajo el HPS. Las referencias internas combinan código de técnica + HEX exacto (+ acabado del hilo en ton-sur-ton); la equivalencia Pantone TCX / Madeira se casa en taller sobre muestra física y el CMYK es orientativo (sin perfil ICC).
+- A cover with the full-garment render.
+- A placement sheet with dimensions.
+- Materials and hardware.
+- A production order by size.
+- One file per technique (SVG / 300 dpi PNG).
 
-## Arquitectura
+The project's typefaces are embedded in the PDF (Times, Helvetica and Courier as fallbacks).
 
-```
-src/
-├── app/
-│   ├── api/generate/route.ts      # POST → DALL·E 3 (key de cabecera o servidor) / Recraft. GET → claves del servidor (booleanos)
-│   ├── layout.tsx · page.tsx · globals.css
-├── components/
-│   ├── studio/StudioShell.tsx     # Atelier: visor 3D a sangre + panel flotante (modo inmersivo)
-│   ├── configurator/              # Configurador de taller: ConfiguratorShell (pasos, tallas, orden) · ConfiguratorViewer
-│   ├── sidebar/                   # Sidebar (pestañas) · Generate/Text/Color(Garment)/Element/Selection/Export panels
-│   ├── canvas/                    # TextileCanvas (lienzo miniatura, drop, teclado) · FabricView (un lienzo por cara)
-│   ├── three/                     # HoodieViewer · HoodieScene · ProductLighting (estudio) · GltfHoodie · PrintDecal (<Decal>) · Hardware (ojales) · CalibrationPanel · CameraRig
-│   └── ui/                        # Section · SpecRow · Button · Segmented
-└── lib/
-    ├── hoodie/spec.ts             # ⭐ Fuente de verdad física: 7 px = 1 cm, HPS, áreas, técnicas, fuentes, tejido y fornituras
-    ├── hoodie/references.ts       # Referencias de tinta/hilo (SER-FFFFFF, BTT-0B0B0B-SAT) y desglose RGB/CMYK
-    ├── fabric/editor.ts           # Init del lienzo, template, guías, snapping, assets, métricas, acciones
-    ├── fabric/render.ts           # Render de regiones (textura, PNG 300 dpi, plano técnico) y mapas de relieve/brillo del bordado
-    ├── fabric/registry.ts         # Puente Fabric ⇄ Three (lienzos, canvas de textura, eventos)
-    ├── ai/                        # Direcciones de colección (prompt) + proveedores (openai, recraft)
-    ├── settings.ts                # OpenAI API Key en localStorage (useSyncExternalStore)
-    ├── image/knockout.ts          # Negro → transparente (brillo a alfa)
-    ├── svg/                       # sanitize · stripBackground · colors
-    ├── export/techPack.ts         # SVG, PNG, dossier PDF (cotas vectoriales, materiales, fornituras) y ZIP
-    ├── fabric/tint.ts             # Tinte SVG/texto (fill/stroke) y PNG (BlendColor tint), técnica y ton-sur-ton por pieza
-    ├── fabric/garment.ts          # Recoloreado del template 2D por tonos (tejido, costuras, ojales, herretes, cordón)
-    ├── color.ts                   # Utilidades HEX: mezcla, luminancia, contraste, CMYK aproximado
-    ├── three/modelConfig.ts       # Ruta del GLB, normalización, HPS del modelo, material
-    ├── three/stage.ts             # Ambientes del plató (Salon / Nuit): fondo, luces, exposición, sombras
-    ├── three/fabricTexture.ts     # Normal map procedural de punto de felpa
-    ├── three/fabricShading.ts     # Suelo de albedo del tejido (prenda y decals)
-    ├── configurator/              # Catálogo del taller (collection) y su aplicación a los lienzos con medidas (apply)
-    ├── fabric/coverage.ts         # Superficie real de una pieza y puntadas estimadas
-    ├── three/decalPlacement.ts    # Posición/rotación/escala del <Decal> en espacio local de la malla
-    ├── three/calibration.ts       # Orientación, altura y escala del estampado (persistido)
-    └── store.ts                   # Estado global (zustand): cara activa, cámara, pestañas, assets, tejido, fornituras, modo inmersivo
-```
+## Tech stack
 
-### Escala y posición (cómo se calculan las medidas)
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router), React 19, TypeScript |
+| 2D canvas | Fabric.js 7 |
+| 3D | three.js, @react-three/fiber 9, @react-three/drei 10 |
+| State | zustand |
+| AI | OpenAI DALL·E 3 (user key or server key), Recraft v3 as a vector alternative |
+| Export | jsPDF (dossier with vector dimensions), JSZip |
+| Colour | react-colorful |
+| Fonts | Self-hosted @fontsource: Inter, Bodoni Moda, Cormorant Garamond, IBM Plex Mono, plus bold display faces |
+| Styling | Tailwind CSS 4 |
 
-`lib/hoodie/spec.ts` define el template a escala: **7 unidades de escena = 1 cm** (pecho 66 cm = 462 px) y el **HPS** (*High Point Shoulder*, punto alto del hombro) en `y = 190`. Las áreas de impresión se definen en cm (trasera 38 × 48 cm a 10 cm del HPS, delantera 30 × 24 cm a 15 cm). Cualquier objeto del lienzo se mide con su bounding box → cm, y su posición se expresa como distancia desde el HPS y desvío respecto al eje central, que es como lo especifica una fábrica.
+## Project structure
 
-### Conexión Fabric.js → Three.js (`<Decal>` de drei, sin UVs)
+| Path | Contents |
+|---|---|
+| `src/app/` | Routes: `/`, `/configurador`, `/patron`, `/ayuda`, and `api/generate` |
+| `src/components/three/` | 3D scene, decal projection, direct editing, lighting, hardware |
+| `src/components/canvas/`, `sidebar/`, `studio/`, `pattern/` | The Fabric canvas and the editing panels |
+| `src/lib/three/decalPlacement.ts` | The projection: an orthographic projector plus one `DecalGeometry` patch per fabric panel |
+| `src/lib/hoodie/spec.ts` | Physical scale, HPS and print areas |
+| `src/lib/configurador/collection.ts` | The workshop catalogue |
+| `src/lib/fabric/` | Effects, parts, undo/redo history |
+| `src/lib/ai/` | The AI providers |
+| `docs/MANUAL-USUARIO.md` | The user manual (Spanish) |
+| `public/manual/` | Manual screenshots |
 
-1. Cada cara (pecho / espalda) tiene un `<canvas>` de textura estable en `registry.ts`.
-2. Cualquier cambio en el lienzo (añadir, mover, escalar, rotar…) emite `notifyDesignChanged(view)`.
-3. `useDesignTextures` repinta, como máximo una vez por frame, **sólo el área de impresión** (sin template ni guías, fondo transparente) y marca `CanvasTexture.needsUpdate`.
-4. `lib/three/decalPlacement.ts` calcula dónde va cada estampa **sin mirar las UVs del modelo**:
-   - define el proyector en mundo: eje central de la prenda, altura real del área respecto al HPS, mirando de frente (pecho) o desde atrás (espalda), con el tamaño físico del área (cm → m);
-   - lanza un raycast para encontrar la superficie y la **malla principal** en ese punto (ignora piezas pequeñas como cordones o etiquetas);
-   - convierte posición, rotación y escala al **espacio local de esa malla**, que es como trabaja `<Decal>`. Así funciona aunque el GLB tenga nodos rotados o escalados (Sketchfab, Blender en Z-up…).
-5. `PrintDecal` monta `<Decal>` **dentro** de la malla con `createPortal`, con `depthTest` activo (la espalda no se transparenta desde delante) y un `meshStandardMaterial` para que la tinta reciba luz.
+## Status and known limitations
 
-### Calibración del modelo
+This is a working project, not a finished product. Please read this before relying on it.
 
-Botón **Calibrar** en el visor (se guarda en el navegador):
+- **The AI integration was developed against simulated responses** and has not been verified end to end against the live OpenAI and Recraft APIs. Test it with your own key.
+- **Most visual testing used a generated test model**, plus a real GLB in later sessions. Eyelet and placement positions depend on where the HPS sits in *your* model, so expect to use the Calibrate panel.
+- **No 3D model is included** (see above), so a fresh clone shows a notice until you add one.
+- **The interface and manual are in Spanish only.**
+- **Helvetica Neue is a system font** (macOS and iOS). On Windows it is previewed with Inter Light.
+- **The `/patron` mode is in development.** Still pending: gradients, seamless side panels, a dossier that includes the pattern, persistence, and testing with a real mouse and touch screen (tests used synthetic pointer events).
+- **Suggested next steps:** project persistence, vectorizing the DALL·E PNG, a size-grading table, a Madeira/Pantone thread library, and a rate limit on the AI endpoint.
+- **No automated tests yet.** `npm run typecheck` and `npm run build` are the safety net.
 
-| Ajuste | Cuándo usarlo |
-| --- | --- |
-| Orientación 0/90/180/270° | El estampado del pecho aparece en la espalda o en un lateral (el GLB no mira a +Z) |
-| Altura del estampado (±20 cm) | Sale demasiado alto o bajo (el HPS de tu modelo no está donde se estima) |
-| Escala del estampado (60–150 %) | La prenda 3D no mide 66 cm de pecho como el lienzo 2D |
-| Mostrar caja de proyección | Ver el volumen exacto que proyecta cada `<Decal>` |
+Contributions are welcome. Open an issue first for anything large.
 
-### Modelo 3D
+## License and credits
 
-Sólo se carga `public/models/hoodie.glb`: se comprueba con un `HEAD` antes de montar el visor, se normaliza (0,84 m de alto, centrado, bajo en `HEM_Y`) y se tiñe con el color del tejido conservando su relieve (normal map, oclusión y rugosidad del GLB; si no trae normal map se usa el punto de felpa procedural). Si falta o está corrupto, el visor muestra el aviso con un botón «Reintentar» (que vacía la caché de `useGLTF`).
-
-## Seguridad
-
-- La key del usuario sólo se usa para la petición en curso: el servidor no la guarda ni la registra (los logs sólo llevan el mensaje de error). Se valida su formato (`sk-…`).
-- Validación de entrada (longitud de prompt, formato, nº de variaciones) y cabeceras de endurecimiento (`X-Frame-Options`, `nosniff`, `Referrer-Policy`).
-- Anti-SSRF: sólo se descargan resultados de dominios `*.recraft.ai` por HTTPS.
-- Los SVG (IA o subidos) se sanean: sin `<script>`, `on*=`, `foreignObject`, entidades XML ni recursos externos.
-- Todo llega al cliente como `data:` URL → sin CORS y sin *tainted canvas* al exportar o texturizar.
-
-## Próximos pasos sugeridos
-
-- Persistencia de proyectos (Supabase / Postgres + almacenamiento de assets).
-- Vectorizado del PNG de DALL·E (potrace / Recraft `vectorize`) para que el arte salga en SVG puro: el blanco sobre negro es ideal para trazar.
-- Más prendas y tallas (tabla de gradación de la impresión por talla).
-- Biblioteca física de hilos (Madeira / Gunold) y Pantone TCX para sustituir las referencias internas por códigos de proveedor.
-- Autenticación del equipo y rate-limit del endpoint de IA.
+- Code: **[MIT](LICENSE)**, Copyright (c) 2026 Sothe ([@ImSothe](https://github.com/ImSothe)).
+- Fonts: bundled under the SIL Open Font License; see [public/fonts/pdf/LICENSES.txt](public/fonts/pdf/LICENSES.txt).
+- The 3D hoodie model shown in the screenshots is not part of this repository.
+- Built with Next.js, React, three.js, react-three-fiber, drei, Fabric.js and jsPDF.

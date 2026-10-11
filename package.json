@@ -2,7 +2,25 @@
   "name": "ai-hoodie-studio",
   "version": "0.1.0",
   "private": true,
-  "description": "AI Hoodie Studio — herramienta interna para diseñar sudaderas streetwear con IA y exportar tech packs de producción.",
+  "description": "AI Hoodie Studio - design hoodies with AI on a 3D garment and export a production-ready workshop dossier (tech pack PDF with vector dimensions, one file per technique) and work orders.",
+  "license": "MIT",
+  "author": "Sothe (https://github.com/ImSothe)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ImSothe/AI-Hoodie-Studio.git"
+  },
+  "keywords": [
+    "nextjs",
+    "react",
+    "three.js",
+    "react-three-fiber",
+    "fabric.js",
+    "3d-configurator",
+    "hoodie",
+    "tech-pack",
+    "apparel",
+    "streetwear"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
