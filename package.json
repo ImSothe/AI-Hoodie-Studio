@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "AI Hoodie Studio - design hoodies with AI on a 3D garment and export a production-ready workshop dossier (tech pack PDF with vector dimensions, one file per technique) and work orders.",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "Sothe (https://github.com/ImSothe)",
   "repository": {
     "type": "git",

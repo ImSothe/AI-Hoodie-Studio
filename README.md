@@ -1,6 +1,6 @@
 # AI Hoodie Studio
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-green.svg)](LICENSE)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![three.js](https://img.shields.io/badge/three.js-r186-black)
@@ -9,7 +9,7 @@ A digital atelier to **design hoodies with AI** and produce a **production-ready
 
 It also includes a **workshop configurator** that turns choices (fabric, personalization, placement, quantities per size) into a numbered **work order**.
 
-> **Open source.** This project is released under the [MIT license](LICENSE). Use it, modify it, build on it, even commercially. No permission needed, no warranty given. If it is useful to you, a star or a mention is appreciated but not required.
+> **Source available.** This project is released under the [PolyForm Noncommercial licence](LICENSE). Use it, study it and modify it for any noncommercial purpose; commercial use is reserved to the author. No warranty given. If it is useful to you, a star or a mention is appreciated.
 
 <p align="center">
   <img src="public/manual/resultado.webp" alt="The atelier: a hoodie with two graphic pieces, each with its own technique" width="900"><br>
@@ -214,7 +214,7 @@ Contributions are welcome. Open an issue first for anything large.
 
 ## License and credits
 
-- Code: **[MIT](LICENSE)**, Copyright (c) 2026 Sothe ([@ImSothe](https://github.com/ImSothe)).
+- Code: **[PolyForm Noncommercial 1.0.0](LICENSE)** (versions published before this change remain under MIT), Copyright (c) 2026 Sothe ([@ImSothe](https://github.com/ImSothe)).
 - Fonts: bundled under the SIL Open Font License; see [public/fonts/pdf/LICENSES.txt](public/fonts/pdf/LICENSES.txt).
 - The 3D hoodie model shown in the screenshots is not part of this repository.
 - Built with Next.js, React, three.js, react-three-fiber, drei, Fabric.js and jsPDF.
